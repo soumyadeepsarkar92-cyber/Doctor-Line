@@ -33,6 +33,7 @@ import com.example.ui.MainViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import coil.compose.AsyncImage
 
 @Composable
 fun AdminModuleScreen(
@@ -46,6 +47,7 @@ fun AdminModuleScreen(
 
     val menus = listOf(
         Pair("Dashboard", Icons.Rounded.Analytics),
+        Pair("Requests", Icons.Rounded.AppRegistration),
         Pair("Pharmacies", Icons.Rounded.LocalPharmacy),
         Pair("Subscriptions", Icons.Rounded.CardMembership),
         Pair("Users", Icons.Rounded.Group),
@@ -180,6 +182,7 @@ fun AdminModuleScreen(
             Box(modifier = Modifier.weight(1f)) {
                 when (selectedMenu) {
                     "Dashboard" -> AdminDashboardView(viewModel = viewModel)
+                    "Requests" -> AdminRequestsView(viewModel = viewModel)
                     "Pharmacies" -> AdminPharmaciesView(viewModel = viewModel)
                     "Subscriptions" -> AdminSubscriptionsView(viewModel = viewModel)
                     "Users" -> AdminUsersView(viewModel = viewModel)
@@ -1272,6 +1275,379 @@ fun AdminSettingsView(viewModel: MainViewModel, logout: () -> Unit) {
                 .height(48.dp)
         ) {
             Text("Logout of Administration Panel", fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+fun AdminRequestsView(viewModel: MainViewModel) {
+    val requests by viewModel.allPharmacyRequests.collectAsState()
+    val activeUser by viewModel.activeUser.collectAsState()
+    val currentAdminId = activeUser?.id ?: "master_admin"
+
+    var selectedImageUri by remember { mutableStateOf<String?>(null) }
+    var selectedImageTitle by remember { mutableStateOf("") }
+
+    val pendingRequests = requests.filter { it.status.lowercase() == "pending" }
+    val approvedRequests = requests.filter { it.status.lowercase() == "approved" }
+    val rejectedRequests = requests.filter { it.status.lowercase() == "rejected" }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        contentPadding = PaddingValues(bottom = 24.dp)
+    ) {
+        // Summary row
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                SummaryCard(
+                    title = "Pending",
+                    count = pendingRequests.size,
+                    color = Color(0xFFEAB308),
+                    modifier = Modifier.weight(1f)
+                )
+                SummaryCard(
+                    title = "Approved",
+                    count = approvedRequests.size,
+                    color = Color(0xFF22C55E),
+                    modifier = Modifier.weight(1f)
+                )
+                SummaryCard(
+                    title = "Rejected",
+                    count = rejectedRequests.size,
+                    color = Color(0xFFEF4444),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        if (requests.isEmpty()) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 40.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.AssignmentLate,
+                            contentDescription = null,
+                            tint = Color(0xFF94A3B8),
+                            modifier = Modifier.size(56.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "No Pharmacy Requests Yet",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = Color(0xFF0F172A)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Submitted registration requests from pharmacies will appear here.",
+                            fontSize = 13.sp,
+                            color = Color(0xFF64748B),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+        } else {
+            items(requests) { req ->
+                PharmacyRequestCard(
+                    req = req,
+                    onApprove = { viewModel.approvePharmacyRequest(req.id, currentAdminId) },
+                    onReject = { viewModel.rejectPharmacyRequest(req.id) },
+                    onViewImage = { uri, title ->
+                        selectedImageUri = uri
+                        selectedImageTitle = title
+                    }
+                )
+            }
+        }
+    }
+
+    // Modal Image Previewer
+    if (selectedImageUri != null) {
+        AlertDialog(
+            onDismissRequest = { selectedImageUri = null },
+            confirmButton = {
+                TextButton(onClick = { selectedImageUri = null }) {
+                    Text("Close Preview", fontWeight = FontWeight.Bold, color = Color(0xFF5D3FD3))
+                }
+            },
+            title = {
+                Text(
+                    text = selectedImageTitle,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    color = Color(0xFF0F172A)
+                )
+            },
+            text = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(300.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF0B1220)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AsyncImage(
+                        model = selectedImageUri,
+                        contentDescription = selectedImageTitle,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                        error = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_gallery),
+                        placeholder = androidx.compose.ui.res.painterResource(id = android.R.drawable.ic_menu_gallery)
+                    )
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun SummaryCard(
+    title: String,
+    count: Int,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(color))
+                Text(title, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF64748B))
+            }
+            Text(
+                text = count.toString(),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Black,
+                color = Color(0xFF0F172A)
+            )
+        }
+    }
+}
+
+@Composable
+fun PharmacyRequestCard(
+    req: PharmacyRequestEntity,
+    onApprove: () -> Unit,
+    onReject: () -> Unit,
+    onViewImage: (String, String) -> Unit
+) {
+    val statusColor = when (req.status.lowercase()) {
+        "approved" -> Color(0xFF22C55E)
+        "rejected" -> Color(0xFFEF4444)
+        else -> Color(0xFFEAB308)
+    }
+
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            // Header Row: Pharmacy Name & Status Badge
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = req.pharmacyName,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = Color(0xFF0F172A),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "Submitted: " + SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(Date(req.createdAt)),
+                        fontSize = 11.sp,
+                        color = Color(0xFF94A3B8)
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(32.dp))
+                        .background(statusColor.copy(alpha = 0.12f))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = req.status.replaceFirstChar { it.uppercase() },
+                        color = statusColor,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Divider(color = Color(0xFFF1F5F9), modifier = Modifier.padding(vertical = 12.dp))
+
+            // Grid / Details Area
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                DetailRow(icon = Icons.Rounded.Person, label = "Owner", value = req.ownerName)
+                DetailRow(icon = Icons.Rounded.Badge, label = "Drug License", value = req.licenseNo)
+                DetailRow(icon = Icons.Rounded.Phone, label = "Contact", value = "${req.mobile} • ${req.email}")
+                DetailRow(icon = Icons.Rounded.LocationOn, label = "Address", value = req.address)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Document Uploads row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                DocumentThumb(
+                    title = "Drug License",
+                    subtitle = "Verify registration certificate",
+                    onClick = { onViewImage(req.licenseImage, "${req.pharmacyName} - Drug License") },
+                    modifier = Modifier.weight(1f)
+                )
+
+                if (req.pharmacyPhoto != null) {
+                    DocumentThumb(
+                        title = "Storefront",
+                        subtitle = "Verify premises photo",
+                        onClick = { onViewImage(req.pharmacyPhoto, "${req.pharmacyName} - Storefront Photo") },
+                        modifier = Modifier.weight(1f)
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(54.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFFF8FAFC)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No Storefront Photo", fontSize = 11.sp, color = Color(0xFF94A3B8), fontWeight = FontWeight.Medium)
+                    }
+                }
+            }
+
+            // Action Buttons (Only show if pending)
+            if (req.status.lowercase() == "pending") {
+                Spacer(modifier = Modifier.height(18.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onReject,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF4444)),
+                        border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.5f)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(42.dp)
+                    ) {
+                        Icon(Icons.Rounded.Cancel, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Reject Request", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+
+                    Button(
+                        onClick = onApprove,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF22C55E)),
+                        modifier = Modifier
+                            .weight(1.2f)
+                            .height(42.dp)
+                    ) {
+                        Icon(Icons.Rounded.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Approve & Provision", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DetailRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color(0xFF64748B),
+            modifier = Modifier
+                .size(16.dp)
+                .padding(top = 2.dp)
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Column {
+            Text(label, fontSize = 10.sp, color = Color(0xFF94A3B8), fontWeight = FontWeight.Bold)
+            Text(value, fontSize = 13.sp, color = Color(0xFF334155), fontWeight = FontWeight.Medium)
+        }
+    }
+}
+
+@Composable
+fun DocumentThumb(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F5F9)),
+        modifier = modifier
+            .height(54.dp)
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Image,
+                contentDescription = null,
+                tint = Color(0xFF5D3FD3),
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(verticalArrangement = Arrangement.Center) {
+                Text(title, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF334155))
+                Text(subtitle, fontSize = 9.sp, color = Color(0xFF64748B), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
 }

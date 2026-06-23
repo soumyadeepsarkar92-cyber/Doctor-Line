@@ -115,4 +115,39 @@ interface DoctorLineDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAuditLog(log: AuditLogEntity)
+
+    // Reviews
+    @Query("SELECT * FROM reviews ORDER BY createdAt DESC")
+    fun getAllReviewsFlow(): Flow<List<ReviewEntity>>
+
+    @Query("SELECT * FROM reviews WHERE doctorId = :doctorId ORDER BY createdAt DESC")
+    fun getReviewsForDoctorFlow(doctorId: String): Flow<List<ReviewEntity>>
+
+    @Query("SELECT * FROM reviews WHERE patientId = :patientId ORDER BY createdAt DESC")
+    fun getReviewsForPatientFlow(patientId: String): Flow<List<ReviewEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertReview(review: ReviewEntity)
+
+    @Update
+    suspend fun updateReview(review: ReviewEntity)
+
+    @Query("DELETE FROM reviews WHERE id = :id")
+    suspend fun deleteReviewById(id: String)
+
+    // Pharmacy approval requests
+    @Query("SELECT * FROM pharmacy_requests ORDER BY createdAt DESC")
+    fun getAllPharmacyRequests(): Flow<List<PharmacyRequestEntity>>
+
+    @Query("SELECT * FROM pharmacy_requests WHERE email = :email LIMIT 1")
+    suspend fun getPharmacyRequestByEmail(email: String): PharmacyRequestEntity?
+
+    @Query("SELECT * FROM pharmacy_requests WHERE licenseNo = :licenseNo LIMIT 1")
+    suspend fun getPharmacyRequestByLicense(licenseNo: String): PharmacyRequestEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPharmacyRequest(request: PharmacyRequestEntity)
+
+    @Update
+    suspend fun updatePharmacyRequest(request: PharmacyRequestEntity)
 }

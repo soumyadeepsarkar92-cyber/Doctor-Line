@@ -52,6 +52,12 @@ class MainViewModel(application: Application, private val repository: DoctorLine
     val auditLogs: StateFlow<List<AuditLogEntity>> = repository.auditLogs
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val allReviews: StateFlow<List<ReviewEntity>> = repository.allReviews
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allPharmacyRequests: StateFlow<List<PharmacyRequestEntity>> = repository.allPharmacyRequests
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Selection States for patient booking flows
     private val _selectedDoctor = MutableStateFlow<DoctorEntity?>(null)
     val selectedDoctor: StateFlow<DoctorEntity?> = _selectedDoctor.asStateFlow()
@@ -306,9 +312,121 @@ class MainViewModel(application: Application, private val repository: DoctorLine
         }
     }
 
+    fun logAction(action: String, details: String) {
+        viewModelScope.launch {
+            repository.logAction(action, details)
+        }
+    }
+
     fun toggleSubscriptionRenewal(id: String, active: Boolean) {
         viewModelScope.launch {
             repository.toggleSubscriptionRenewal(id, active)
+        }
+    }
+
+    fun submitOrUpdateReview(patientId: String, patientName: String, doctorId: String, rating: Int, reviewText: String) {
+        viewModelScope.launch {
+            val existing = allReviews.value.find { it.patientId == patientId && it.doctorId == doctorId }
+            if (existing != null) {
+                val updated = existing.copy(rating = rating, review = reviewText, createdAt = System.currentTimeMillis())
+                repository.editReview(updated)
+            } else {
+                val newReview = ReviewEntity(
+                    patientId = patientId,
+                    patientName = patientName,
+                    doctorId = doctorId,
+                    rating = rating,
+                    review = reviewText
+                )
+                repository.addReview(newReview)
+            }
+        }
+    }
+
+    fun deleteReview(reviewId: String, doctorId: String) {
+        viewModelScope.launch {
+            repository.deleteReview(reviewId, doctorId)
+        }
+    }
+
+    suspend fun getPharmacyRequestByEmail(email: String): PharmacyRequestEntity? {
+        return repository.getPharmacyRequestByEmail(email)
+    }
+
+    fun submitPharmacyRequest(
+        pharmacyName: String,
+        ownerName: String,
+        licenseNo: String,
+        mobile: String,
+        email: String,
+        passwordPlain: String,
+        address: String,
+        licenseImage: String,
+        pharmacyPhoto: String?,
+        onComplete: (Boolean, String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                if (pharmacyName.isBlank() || ownerName.isBlank() || licenseNo.isBlank() ||
+                    mobile.isBlank() || email.isBlank() || passwordPlain.isBlank() || address.isBlank()
+                ) {
+                    onComplete(false, "All fields marked with * are strictly required.")
+                    return@launch
+                }
+
+                if (passwordPlain.length < 6) {
+                    onComplete(false, "Password must be at least 6 characters.")
+                    return@launch
+                }
+
+                val existingEmailRequest = repository.getPharmacyRequestByEmail(email)
+                if (existingEmailRequest != null) {
+                    onComplete(false, "This Email Address has already been submitted or is in use.")
+                    return@launch
+                }
+
+                val existingLicenseRequest = repository.getPharmacyRequestByLicense(licenseNo)
+                if (existingLicenseRequest != null) {
+                    onComplete(false, "This Drug License Number has already been submitted or is in use.")
+                    return@launch
+                }
+
+                val existingPharmacies = repository.allPharmacies.firstOrNull() ?: emptyList()
+                if (existingPharmacies.any { it.license.lowercase() == licenseNo.lowercase() }) {
+                    onComplete(false, "This Drug License Number belongs to an already active pharmacy.")
+                    return@launch
+                }
+
+                val request = PharmacyRequestEntity(
+                    pharmacyName = pharmacyName,
+                    ownerName = ownerName,
+                    licenseNo = licenseNo,
+                    mobile = mobile,
+                    email = email,
+                    passwordHash = passwordPlain,
+                    address = address,
+                    licenseImage = licenseImage,
+                    pharmacyPhoto = pharmacyPhoto,
+                    status = "pending"
+                )
+
+                repository.addPharmacyRequest(request)
+                onComplete(true, "Your registration request has been submitted successfully.\n\nPlease contact DoctorLine Admin and complete payment.\n\nYour account will be activated after approval.")
+            } catch (e: Exception) {
+                onComplete(false, "Error submitting request: ${e.message}")
+            }
+        }
+    }
+
+    fun approvePharmacyRequest(requestId: String, currentAdminId: String) {
+        viewModelScope.launch {
+            repository.approvePharmacyRequest(requestId, currentAdminId)
+        }
+    }
+
+    fun rejectPharmacyRequest(requestId: String) {
+        viewModelScope.launch {
+            repository.rejectPharmacyRequest(requestId)
         }
     }
 

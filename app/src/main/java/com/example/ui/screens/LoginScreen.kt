@@ -39,6 +39,18 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import io.github.jan.supabase.auth.auth
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.filled.AppRegistration
+import androidx.compose.material.icons.filled.Badge
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Store
 
 @Composable
 fun LoginScreen(
@@ -46,6 +58,7 @@ fun LoginScreen(
     onLoginSuccess: (name: String, email: String, phone: String, role: String) -> Unit
 ) {
     var selectedRole by remember { mutableStateOf("Patient") } // "Patient", "Pharmacy", "Admin"
+    var showRegisterPharmacyDialog by remember { mutableStateOf(false) }
     
     // Form Inputs
     var emailInput by remember { mutableStateOf("") }
@@ -397,6 +410,23 @@ fun LoginScreen(
                                         scope.launch {
                                             isAuthenticating = true
                                             try {
+                                                // Check registration request status first
+                                                val req = viewModel.getPharmacyRequestByEmail(emailInput.trim())
+                                                if (req != null) {
+                                                    when (req.status.lowercase()) {
+                                                        "pending" -> {
+                                                            Toast.makeText(context, "Your account is pending approval.", Toast.LENGTH_LONG).show()
+                                                            isAuthenticating = false
+                                                            return@launch
+                                                        }
+                                                        "rejected" -> {
+                                                            Toast.makeText(context, "Your registration was rejected.\n\nPlease contact DoctorLine.", Toast.LENGTH_LONG).show()
+                                                            isAuthenticating = false
+                                                            return@launch
+                                                        }
+                                                    }
+                                                }
+
                                                 if (com.example.data.SupabaseManager.isConfigured) {
                                                     val client = com.example.data.SupabaseManager.client
                                                     if (client != null) {
@@ -435,6 +465,44 @@ fun LoginScreen(
                                 } else {
                                     Text("Access Pharmacy Console", fontWeight = FontWeight.Bold, color = Color.White)
                                 }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            OutlinedButton(
+                                onClick = {
+                                    showRegisterPharmacyDialog = true
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(50.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    width = 1.dp,
+                                    brush = Brush.linearGradient(
+                                        colors = listOf(
+                                            accentColor.copy(alpha = 0.6f),
+                                            accentColor.copy(alpha = 0.2f)
+                                        )
+                                    )
+                                ),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    containerColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.02f)
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AppRegistration,
+                                    contentDescription = null,
+                                    tint = accentColor,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Register New Pharmacy",
+                                    fontWeight = FontWeight.Bold,
+                                    color = textColor,
+                                    fontSize = 14.sp
+                                )
                             }
                         } else {
                             Text(
@@ -489,6 +557,13 @@ fun LoginScreen(
                     }
                 }
             }
+        }
+
+        if (showRegisterPharmacyDialog) {
+            PharmacyRegistrationDialog(
+                viewModel = viewModel,
+                onDismiss = { showRegisterPharmacyDialog = false }
+            )
         }
     }
 }
@@ -586,5 +661,490 @@ fun decodeJwtPayload(token: String): JSONObject? {
     } catch (e: Exception) {
         android.util.Log.e("LoginScreen", "Error decoding JWT", e)
         return null
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PharmacyRegistrationDialog(
+    viewModel: MainViewModel,
+    onDismiss: () -> Unit
+) {
+    var pharmacyName by remember { mutableStateOf("") }
+    var ownerName by remember { mutableStateOf("") }
+    var licenseNo by remember { mutableStateOf("") }
+    var mobile by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
+    var licenseImage by remember { mutableStateOf("") }
+    var pharmacyPhoto by remember { mutableStateOf<String?>(null) }
+    
+    var isSubmitting by remember { mutableStateOf(false) }
+    var successMessage by remember { mutableStateOf<String?>(null) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    val context = LocalContext.current
+
+    // Launchers for image uploads
+    val licenseImageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        if (uri != null) {
+            licenseImage = uri.toString()
+        }
+    }
+
+    val pharmacyPhotoLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        if (uri != null) {
+            pharmacyPhoto = uri.toString()
+        }
+    }
+
+    val darkBackground = Color(0xFF0B1220)
+    val cardBackground = Color(0xFF161F30)
+    val accentGreen = Color(0xFF22C55E)
+    val primaryBlue = Color(0xFF3B82F6)
+
+    AlertDialog(
+        onDismissRequest = { if (!isSubmitting && successMessage == null) onDismiss() },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(12.dp),
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.92f)
+                .clip(RoundedCornerShape(24.dp)),
+            color = darkBackground,
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (successMessage != null) {
+                    // Success View
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(CircleShape)
+                                .background(accentGreen.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = accentGreen,
+                                modifier = Modifier.size(48.dp)
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(24.dp))
+                        
+                        Text(
+                            text = "Registration Submitted",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            textAlign = TextAlign.Center
+                        )
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        Text(
+                            text = successMessage!!,
+                            fontSize = 15.sp,
+                            color = Color(0xFF94A3B8),
+                            textAlign = TextAlign.Center,
+                            lineHeight = 22.sp,
+                            modifier = Modifier.padding(horizontal = 12.dp)
+                        )
+                        
+                        Spacer(modifier = Modifier.height(32.dp))
+                        
+                        Button(
+                            onClick = onDismiss,
+                            colors = ButtonDefaults.buttonColors(containerColor = primaryBlue),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                        ) {
+                            Text("Back to Login", fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+                } else {
+                    // Form Content View
+                    Column(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        // Header
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(cardBackground)
+                                .padding(horizontal = 20.dp, vertical = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Register New Pharmacy",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "DoctorLine Care Console",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF94A3B8)
+                                )
+                            }
+                            IconButton(
+                                onClick = onDismiss,
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.1f))
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Close",
+                                    tint = Color.White
+                                )
+                            }
+                        }
+
+                        // Form Scrollable body
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState())
+                                .padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            if (errorMessage != null) {
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFFEF4444).copy(alpha = 0.15f)),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.4f)),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(14.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Error,
+                                            contentDescription = null,
+                                            tint = Color(0xFFF87171),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Text(
+                                            text = errorMessage!!,
+                                            color = Color(0xFFFCA5A5),
+                                            fontSize = 13.sp
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Input fields
+                            OutlinedTextField(
+                                value = pharmacyName,
+                                onValueChange = { pharmacyName = it },
+                                label = { Text("Pharmacy Name *", color = Color(0xFF94A3B8)) },
+                                placeholder = { Text("e.g. Apollo Lifeline Pharmacy", color = Color(0xFF64748B)) },
+                                leadingIcon = { Icon(Icons.Default.Store, contentDescription = null, tint = primaryBlue) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = primaryBlue,
+                                    unfocusedBorderColor = Color(0xFF334155)
+                                )
+                            )
+
+                            OutlinedTextField(
+                                value = ownerName,
+                                onValueChange = { ownerName = it },
+                                label = { Text("Owner Full Name *", color = Color(0xFF94A3B8)) },
+                                placeholder = { Text("e.g. Dr. Amit Patra", color = Color(0xFF64748B)) },
+                                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = primaryBlue) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = primaryBlue,
+                                    unfocusedBorderColor = Color(0xFF334155)
+                                )
+                            )
+
+                            OutlinedTextField(
+                                value = licenseNo,
+                                onValueChange = { licenseNo = it },
+                                label = { Text("Drug License Number *", color = Color(0xFF94A3B8)) },
+                                placeholder = { Text("e.g. DL-9087-A/2026", color = Color(0xFF64748B)) },
+                                leadingIcon = { Icon(Icons.Default.Badge, contentDescription = null, tint = primaryBlue) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = primaryBlue,
+                                    unfocusedBorderColor = Color(0xFF334155)
+                                )
+                            )
+
+                            OutlinedTextField(
+                                value = mobile,
+                                onValueChange = { mobile = it },
+                                label = { Text("Mobile Number *", color = Color(0xFF94A3B8)) },
+                                placeholder = { Text("e.g. +91 98765 43210", color = Color(0xFF64748B)) },
+                                leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = primaryBlue) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = primaryBlue,
+                                    unfocusedBorderColor = Color(0xFF334155)
+                                ),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
+                            )
+
+                            OutlinedTextField(
+                                value = email,
+                                onValueChange = { email = it },
+                                label = { Text("Email Address *", color = Color(0xFF94A3B8)) },
+                                placeholder = { Text("e.g. contact@apollomed.com", color = Color(0xFF64748B)) },
+                                leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = primaryBlue) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = primaryBlue,
+                                    unfocusedBorderColor = Color(0xFF334155)
+                                ),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+                            )
+
+                            OutlinedTextField(
+                                value = password,
+                                onValueChange = { password = it },
+                                label = { Text("Password * (Min 6 chars)", color = Color(0xFF94A3B8)) },
+                                placeholder = { Text("Enter a secure password", color = Color(0xFF64748B)) },
+                                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = primaryBlue) },
+                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = primaryBlue,
+                                    unfocusedBorderColor = Color(0xFF334155)
+                                ),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                            )
+
+                            OutlinedTextField(
+                                value = address,
+                                onValueChange = { address = it },
+                                label = { Text("Full Business Address *", color = Color(0xFF94A3B8)) },
+                                placeholder = { Text("Complete street address, city, ZIP", color = Color(0xFF64748B)) },
+                                leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null, tint = primaryBlue) },
+                                modifier = Modifier.fillMaxWidth().height(90.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = primaryBlue,
+                                    unfocusedBorderColor = Color(0xFF334155)
+                                ),
+                                maxLines = 3
+                            )
+
+                            // Upload buttons
+                            Text(
+                                text = "SUPPORTING CERTIFICATES & IMAGES",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF94A3B8),
+                                letterSpacing = 1.sp,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+
+                            // Drug License Card
+                            UploadCard(
+                                title = "Drug License Document *",
+                                subtitle = "Upload PDF/JPEG copy of state license",
+                                isUploaded = licenseImage.isNotBlank(),
+                                uploadedName = if (licenseImage.isNotBlank()) "License_Uploaded.jpg" else null,
+                                accentColor = primaryBlue,
+                                onClick = { licenseImageLauncher.launch("image/*") }
+                            )
+
+                            // Pharmacy Photo Card
+                            UploadCard(
+                                title = "Pharmacy Storefront Photo (Optional)",
+                                subtitle = "External clinic/store photo",
+                                isUploaded = pharmacyPhoto != null,
+                                uploadedName = if (pharmacyPhoto != null) "Storefront_Photo.jpg" else null,
+                                accentColor = accentGreen,
+                                onClick = { pharmacyPhotoLauncher.launch("image/*") }
+                            )
+                            
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+
+                        // Bottom Action Bar
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(cardBackground)
+                                .padding(20.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = onDismiss,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(50.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = Color.White,
+                                    containerColor = Color.Transparent
+                                ),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155))
+                            ) {
+                                Text("Cancel", fontWeight = FontWeight.Bold)
+                            }
+
+                            Button(
+                                onClick = {
+                                    if (licenseImage.isBlank()) {
+                                        errorMessage = "Please upload a copy of your Drug License Image."
+                                        return@Button
+                                    }
+                                    isSubmitting = true
+                                    errorMessage = null
+                                    viewModel.submitPharmacyRequest(
+                                        pharmacyName = pharmacyName.trim(),
+                                        ownerName = ownerName.trim(),
+                                        licenseNo = licenseNo.trim(),
+                                        mobile = mobile.trim(),
+                                        email = email.trim(),
+                                        passwordPlain = password,
+                                        address = address.trim(),
+                                        licenseImage = licenseImage,
+                                        pharmacyPhoto = pharmacyPhoto,
+                                        onComplete = { success, msg ->
+                                            isSubmitting = false
+                                            if (success) {
+                                                successMessage = msg
+                                            } else {
+                                                errorMessage = msg
+                                            }
+                                        }
+                                    )
+                                },
+                                modifier = Modifier
+                                    .weight(1.5f)
+                                    .height(50.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = primaryBlue)
+                            ) {
+                                if (isSubmitting) {
+                                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                                } else {
+                                    Icon(Icons.Default.CloudUpload, contentDescription = null, tint = Color.White)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Submit Request", fontWeight = FontWeight.Bold, color = Color.White)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun UploadCard(
+    title: String,
+    subtitle: String,
+    isUploaded: Boolean,
+    uploadedName: String?,
+    accentColor: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isUploaded) Color(0xFF1E293B) else Color(0xFF161F30)
+        ),
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.dp,
+            color = if (isUploaded) accentColor.copy(alpha = 0.5f) else Color(0xFF334155)
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(if (isUploaded) accentColor.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isUploaded) Icons.Default.CheckCircle else Icons.Default.CloudUpload,
+                    contentDescription = null,
+                    tint = if (isUploaded) accentColor else Color(0xFF94A3B8)
+                )
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Text(
+                    text = uploadedName ?: subtitle,
+                    fontSize = 12.sp,
+                    color = if (isUploaded) accentColor else Color(0xFF94A3B8)
+                )
+            }
+            if (isUploaded) {
+                IconButton(onClick = onClick) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit File",
+                        tint = Color(0xFF94A3B8),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
     }
 }

@@ -19,9 +19,11 @@ import kotlinx.coroutines.launch
         SubscriptionEntity::class,
         PaymentEntity::class,
         NotificationEntity::class,
-        AuditLogEntity::class
+        AuditLogEntity::class,
+        ReviewEntity::class,
+        PharmacyRequestEntity::class
     ],
-    version = 3,
+    version = 5,
     exportSchema = false
 )
 abstract class DoctorLineDatabase : RoomDatabase() {

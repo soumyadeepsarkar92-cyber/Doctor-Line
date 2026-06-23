@@ -631,6 +631,10 @@ fun DoctorDetailsScreen(
     val pharmacies by viewModel.allPharmacies.collectAsState()
     val matchingPharmacy = pharmacies.find { it.id == doctor.pharmacyId }
     val selectedSlot by viewModel.selectedTimeSlot.collectAsState()
+    val allReviews by viewModel.allReviews.collectAsState()
+    val activeUser by viewModel.activeUser.collectAsState()
+    val doctorReviews = allReviews.filter { it.doctorId == doctor.id }
+    val computedRating = if (doctorReviews.isNotEmpty()) String.format(java.util.Locale.US, "%.1f", doctorReviews.map { it.rating }.average()) else String.format(java.util.Locale.US, "%.1f", doctor.rating)
 
     val availableSlots = doctor.slotsJson.split(",").map { it.trim() }
 
@@ -713,7 +717,7 @@ fun DoctorDetailsScreen(
                         Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(2.dp))
                         Text(
-                            text = "${doctor.rating}  •  ${doctor.experience} Yrs Experience",
+                            text = "$computedRating  •  ${doctor.experience} Yrs Experience  •  (${doctorReviews.size} reviews)",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFF475569)
@@ -901,6 +905,100 @@ fun DoctorDetailsScreen(
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
                             )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Ratings and reviews section
+            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                Text(
+                    text = "Patient Ratings & Reviews",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B),
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                if (doctorReviews.isEmpty()) {
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "No reviews submitted yet for this clinical specialist. Be the first to consult and share your experience!",
+                            fontSize = 13.sp,
+                            color = Color(0xFF64748B),
+                            modifier = Modifier.padding(16.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        doctorReviews.forEach { review ->
+                            Card(
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+                                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(28.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color(0xFFEEF5FF)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = review.patientName.take(1).uppercase(),
+                                                    color = Color(0xFF0F52BA),
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = review.patientName,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF1E293B)
+                                            )
+                                        }
+
+                                        // Stars
+                                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                            for (star in 1..5) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Star,
+                                                    contentDescription = null,
+                                                    tint = if (star <= review.rating) Color(0xFFF59E0B) else Color(0xFFE2E8F0),
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    if (review.review.isNotBlank()) {
+                                        Text(
+                                            text = review.review,
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF475569),
+                                            modifier = Modifier.padding(top = 6.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -1364,170 +1462,328 @@ fun BookingSuccessScreen(
 fun PatientAppointmentsScreen(viewModel: MainViewModel) {
     val patientBookings by viewModel.patientBookings.collectAsState()
     val activeDoctors by viewModel.activeDoctors.collectAsState()
+    val activeUser by viewModel.activeUser.collectAsState()
+    val allReviews by viewModel.allReviews.collectAsState()
 
-    var selectedTab by remember { mutableStateOf("Upcoming") } // "Upcoming", "Completed"
+    var selectedTab by remember { mutableStateOf("Upcoming") } // "Upcoming", "History"
+
+    // Dialog state
+    var showReviewDialog by remember { mutableStateOf(false) }
+    var selectedDoctorIdForReview by remember { mutableStateOf<String?>(null) }
+    var selectedDoctorNameForReview by remember { mutableStateOf("") }
+    var ratingState by remember { mutableStateOf(5) }
+    var reviewTextState by remember { mutableStateOf("") }
 
     val filtered = patientBookings.filter {
         if (selectedTab == "Upcoming") it.status == "Upcoming" else it.status != "Upcoming"
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFF8FAFC))
-            .padding(16.dp)
-    ) {
-        Text(
-            text = "My Consultative Bookings",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Black,
-            color = Color(0xFF0F172A),
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-
-        // Custom segment row
-        Row(
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .fillMaxSize()
+                .background(Color(0xFFF8FAFC))
+                .padding(16.dp)
         ) {
-            listOf("Upcoming", "History").forEach { tab ->
-                val isSel = selectedTab == tab
+            Text(
+                text = "My Consultative Bookings",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Black,
+                color = Color(0xFF0F172A),
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            // Custom segment row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf("Upcoming", "History").forEach { tab ->
+                    val isSel = selectedTab == tab
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isSel) Color(0xFF0F52BA) else Color.White)
+                            .clickable { selectedTab = tab }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = tab,
+                            color = if (isSel) Color.White else Color(0xFF64748B),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            }
+
+            if (filtered.isEmpty()) {
                 Box(
                     modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (isSel) Color(0xFF0F52BA) else Color.White)
-                        .clickable { selectedTab = tab }
-                        .padding(vertical = 10.dp),
+                        .fillMaxWidth()
+                        .weight(1f),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = tab,
-                        color = if (isSel) Color.White else Color(0xFF64748B),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Rounded.EventBusy,
+                            contentDescription = "No appointments",
+                            tint = Color(0xFFCBD5E1),
+                            modifier = Modifier.size(56.dp)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "No clinical bookings under '$selectedTab'",
+                            fontSize = 14.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(filtered) { booking ->
+                        val clinician = activeDoctors.find { it.id == booking.doctorId }
+                        val patientId = activeUser?.id ?: ""
+                        val existingReview = allReviews.find { it.patientId == patientId && it.doctorId == booking.doctorId }
+
+                        Card(
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .shadow(1.dp, shape = RoundedCornerShape(16.dp))
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0xFFEEF5FF))
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = "Token #${booking.tokenNumber}",
+                                            color = Color(0xFF0F52BA),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Black
+                                        )
+                                    }
+                                    Text(
+                                        text = booking.dateStr,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFF64748B)
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Text(
+                                    text = clinician?.name ?: "Qualified Specialist",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF0F172A)
+                                )
+                                Text(
+                                    text = "Specialty: ${clinician?.specialization ?: "Pediatrician"}  •  Slot: ${booking.timeStr}",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF475569),
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Divider(color = Color(0xFFF1F5F9))
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = "Status",
+                                            tint = when (booking.status) {
+                                                "Upcoming" -> Color(0xFF0F52BA)
+                                                "Completed" -> Color(0xFF10B981)
+                                                else -> Color(0xFFEF4444)
+                                            },
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = booking.status,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = when (booking.status) {
+                                                "Upcoming" -> Color(0xFF0F52BA)
+                                                "Completed" -> Color(0xFF10B981)
+                                                else -> Color(0xFFEF4444)
+                                            }
+                                        )
+                                    }
+
+                                    // Actions: Cancel if upcoming, Review if completed
+                                    if (booking.status == "Upcoming") {
+                                        TextButton(
+                                            onClick = { viewModel.updateBookingStatus(booking.id, "Cancelled") },
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                                        ) {
+                                            Text("Cancel Slot", color = Color(0xFFEF4444), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    } else if (booking.status == "Completed") {
+                                        if (existingReview != null) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = "Reviewed (${existingReview.rating} ★)",
+                                                    fontSize = 12.sp,
+                                                    color = Color(0xFF059669),
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(end = 8.dp)
+                                                )
+                                                TextButton(
+                                                    onClick = {
+                                                        selectedDoctorIdForReview = booking.doctorId
+                                                        selectedDoctorNameForReview = clinician?.name ?: "Doctor"
+                                                        ratingState = existingReview.rating
+                                                        reviewTextState = existingReview.review
+                                                        showReviewDialog = true
+                                                    },
+                                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                                                ) {
+                                                    Text("Edit Review", color = Color(0xFF0F52BA), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                        } else {
+                                            TextButton(
+                                                onClick = {
+                                                    selectedDoctorIdForReview = booking.doctorId
+                                                    selectedDoctorNameForReview = clinician?.name ?: "Doctor"
+                                                    ratingState = 5
+                                                    reviewTextState = ""
+                                                    showReviewDialog = true
+                                                },
+                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                                            ) {
+                                                Text("Submit Review", color = Color(0xFFD97706), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
 
-        if (filtered.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Rounded.EventBusy,
-                        contentDescription = "No appointments",
-                        tint = Color(0xFFCBD5E1),
-                        modifier = Modifier.size(56.dp)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "No clinical bookings under '$selectedTab'",
-                        fontSize = 14.sp,
-                        color = Color(0xFF64748B)
-                    )
-                }
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(filtered) { booking ->
-                    val clinician = activeDoctors.find { it.id == booking.doctorId }
-                    
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
+        // Ratings Dialog
+        if (showReviewDialog && selectedDoctorIdForReview != null) {
+            androidx.compose.ui.window.Dialog(onDismissRequest = { showReviewDialog = false }) {
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                ) {
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .shadow(1.dp, shape = RoundedCornerShape(16.dp))
+                            .padding(20.dp)
+                            .fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
+                        Text(
+                            text = "Rate & Review",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color(0xFF0F172A)
+                        )
+                        Text(
+                            text = selectedDoctorNameForReview,
+                            fontSize = 14.sp,
+                            color = Color(0xFF475569),
+                            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+                        )
+
+                        // Stars row
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.padding(bottom = 20.dp)
+                        ) {
+                            for (star in 1..5) {
+                                val isSelected = star <= ratingState
+                                Icon(
+                                    imageVector = if (isSelected) Icons.Default.Star else Icons.Rounded.StarOutline,
+                                    contentDescription = "$star Stars",
+                                    tint = if (isSelected) Color(0xFFF59E0B) else Color(0xFFCBD5E1),
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0xFFEEF5FF))
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Text(
-                                        text = "Token #${booking.tokenNumber}",
-                                        color = Color(0xFF0F52BA),
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Black
-                                    )
-                                }
-                                Text(
-                                    text = booking.dateStr,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFF64748B)
+                                        .size(36.dp)
+                                        .clickable { ratingState = star }
                                 )
                             }
+                        }
 
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            Text(
-                                text = clinician?.name ?: "Qualified Specialist",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF0F172A)
+                        // Text Input
+                        OutlinedTextField(
+                            value = reviewTextState,
+                            onValueChange = { reviewTextState = it },
+                            placeholder = { Text("Write about your clinical consultation experience...") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(120.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFF0F52BA),
+                                unfocusedBorderColor = Color(0xFFE2E8F0)
                             )
-                            Text(
-                                text = "Specialty: ${clinician?.specialization ?: "Pediatrician"}  •  Slot: ${booking.timeStr}",
-                                fontSize = 12.sp,
-                                color = Color(0xFF475569),
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
+                        )
 
-                            Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(20.dp))
 
-                            Divider(color = Color(0xFFF1F5F9))
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Button(
+                                onClick = { showReviewDialog = false },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9)),
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.CheckCircle,
-                                        contentDescription = "Status",
-                                        tint = if (booking.status == "Upcoming") Color(0xFF0F52BA) else Color(0xFF10B981),
-                                        modifier = Modifier.size(16.dp)
+                                Text("Cancel", color = Color(0xFF475569), fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                onClick = {
+                                    viewModel.submitOrUpdateReview(
+                                        patientId = activeUser?.id ?: "",
+                                        patientName = activeUser?.name ?: "Patient",
+                                        doctorId = selectedDoctorIdForReview!!,
+                                        rating = ratingState,
+                                        reviewText = reviewTextState
                                     )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = booking.status,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (booking.status == "Upcoming") Color(0xFF0F52BA) else Color(0xFF10B981)
-                                    )
-                                }
-                                
-                                // Ability to cancel if upcoming
-                                if (booking.status == "Upcoming") {
-                                    TextButton(
-                                        onClick = { viewModel.updateBookingStatus(booking.id, "Cancelled") },
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                                    ) {
-                                        Text("Cancel Slot", color = Color(0xFFEF4444), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
+                                    showReviewDialog = false
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F52BA)),
+                                modifier = Modifier.weight(1.2f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("Submit", color = Color.White, fontWeight = FontWeight.Bold)
                             }
                         }
                     }

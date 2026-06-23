@@ -309,4 +309,162 @@ class DoctorLineRepository(private val dao: DoctorLineDao) {
         SupabaseManager.insertOrUpdate("pharmacies", payload)
     }
 
+    // Reviews Section
+    val allReviews: Flow<List<ReviewEntity>> = dao.getAllReviewsFlow()
+
+    fun getReviewsForDoctor(doctorId: String): Flow<List<ReviewEntity>> =
+        dao.getReviewsForDoctorFlow(doctorId)
+
+    fun getReviewsForPatient(patientId: String): Flow<List<ReviewEntity>> =
+        dao.getReviewsForPatientFlow(patientId)
+
+    suspend fun addReview(review: ReviewEntity) {
+        dao.insertReview(review)
+        syncReview(review)
+        updateDoctorAvgRating(review.doctorId)
+        logAction("Add Review", "Submitted review for doctor ID: ${review.doctorId}")
+    }
+
+    suspend fun editReview(review: ReviewEntity) {
+        dao.updateReview(review)
+        syncReview(review)
+        updateDoctorAvgRating(review.doctorId)
+        logAction("Edit Review", "Modified review for doctor ID: ${review.doctorId}")
+    }
+
+    suspend fun deleteReview(id: String, doctorId: String) {
+        dao.deleteReviewById(id)
+        SupabaseManager.delete("reviews", id)
+        updateDoctorAvgRating(doctorId)
+        logAction("Delete Review", "Deleted review ID: $id")
+    }
+
+    private suspend fun updateDoctorAvgRating(doctorId: String) {
+        val doctor = dao.getDoctorById(doctorId)
+        if (doctor != null) {
+            val doctorReviews = dao.getReviewsForDoctorFlow(doctorId).firstOrNull() ?: emptyList()
+            if (doctorReviews.isNotEmpty()) {
+                val avgRating = doctorReviews.map { it.rating }.average()
+                val roundedRating = Math.round(avgRating * 10.0) / 10.0
+                val updatedDoctor = doctor.copy(rating = roundedRating)
+                dao.updateDoctor(updatedDoctor)
+                syncDoctor(updatedDoctor)
+            } else {
+                val updatedDoctor = doctor.copy(rating = 0.0)
+                dao.updateDoctor(updatedDoctor)
+                syncDoctor(updatedDoctor)
+            }
+        }
+    }
+
+    private suspend fun syncReview(review: ReviewEntity) {
+        val payload = """
+            {
+                "id": "${review.id}",
+                "patient_id": "${review.patientId}",
+                "patient_name": "${review.patientName.replace("\"", "\\\"")}",
+                "doctor_id": "${review.doctorId}",
+                "rating": ${review.rating},
+                "review": "${review.review.replace("\"", "\\\"")}",
+                "created_at": ${review.createdAt}
+            }
+        """.trimIndent()
+        SupabaseManager.insertOrUpdate("reviews", payload)
+    }
+
+    // Pharmacy Requests Section
+    val allPharmacyRequests: Flow<List<PharmacyRequestEntity>> = dao.getAllPharmacyRequests()
+
+    suspend fun getPharmacyRequestByEmail(email: String): PharmacyRequestEntity? = dao.getPharmacyRequestByEmail(email)
+
+    suspend fun getPharmacyRequestByLicense(licenseNo: String): PharmacyRequestEntity? = dao.getPharmacyRequestByLicense(licenseNo)
+
+    suspend fun addPharmacyRequest(request: PharmacyRequestEntity) {
+        dao.insertPharmacyRequest(request)
+        syncPharmacyRequest(request)
+        logAction("Register Pharmacy Request", "Submitted registration request for: ${request.pharmacyName} (${request.email})")
+    }
+
+    suspend fun approvePharmacyRequest(requestId: String, currentAdminId: String) {
+        val requests = dao.getAllPharmacyRequests().firstOrNull() ?: emptyList()
+        val req = requests.find { it.id == requestId }
+        if (req != null) {
+            val now = System.currentTimeMillis()
+            val approvedReq = req.copy(
+                status = "approved",
+                approvedAt = now,
+                approvedBy = currentAdminId
+            )
+            dao.updatePharmacyRequest(approvedReq)
+            syncPharmacyRequest(approvedReq)
+
+            // Step 1: Create local user entity (auth profile)
+            val authUserId = req.id
+            val userProfile = UserEntity(
+                id = authUserId,
+                name = req.ownerName,
+                email = req.email,
+                phone = req.mobile,
+                role = "Pharmacy",
+                isLoggedIn = false
+            )
+            dao.insertUser(userProfile)
+            syncUser(userProfile)
+
+            // Step 2: Create local pharmacy entity
+            val pharmacy = PharmacyEntity(
+                id = authUserId,
+                name = req.pharmacyName,
+                address = req.address,
+                phone = req.mobile,
+                license = req.licenseNo,
+                bannerName = "medplus",
+                ownerName = req.ownerName,
+                status = "Active",
+                createdDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date()),
+                subscriptionPlan = "Basic",
+                subscriptionStart = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date()),
+                subscriptionExpiry = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date(now + 30L * 24 * 60 * 60 * 1000)),
+                subscriptionAmount = 0.0,
+                subscriptionPaymentStatus = "Paid"
+            )
+            dao.insertPharmacy(pharmacy)
+            syncPharmacy(pharmacy)
+
+            logAction("Approve Pharmacy Request", "Approved and provisioned pharmacy: ${req.pharmacyName}")
+        }
+    }
+
+    suspend fun rejectPharmacyRequest(requestId: String) {
+        val requests = dao.getAllPharmacyRequests().firstOrNull() ?: emptyList()
+        val req = requests.find { it.id == requestId }
+        if (req != null) {
+            val rejectedReq = req.copy(status = "rejected")
+            dao.updatePharmacyRequest(rejectedReq)
+            syncPharmacyRequest(rejectedReq)
+            logAction("Reject Pharmacy Request", "Rejected pharmacy registration: ${req.pharmacyName}")
+        }
+    }
+
+    private suspend fun syncPharmacyRequest(request: PharmacyRequestEntity) {
+        val payload = """
+            {
+                "id": "${request.id}",
+                "pharmacy_name": "${request.pharmacyName.replace("\"", "\\\"")}",
+                "owner_name": "${request.ownerName.replace("\"", "\\\"")}",
+                "license_no": "${request.licenseNo.replace("\"", "\\\"")}",
+                "mobile": "${request.mobile}",
+                "email": "${request.email.replace("\"", "\\\"")}",
+                "password_hash": "${request.passwordHash}",
+                "address": "${request.address.replace("\"", "\\\"")}",
+                "license_image": "${request.licenseImage}",
+                "pharmacy_photo": ${if (request.pharmacyPhoto != null) "\"${request.pharmacyPhoto}\"" else "null"},
+                "status": "${request.status}",
+                "approved_at": ${if (request.approvedAt != null) request.approvedAt else "null"},
+                "approved_by": ${if (request.approvedBy != null) "\"${request.approvedBy}\"" else "null"},
+                "created_at": ${request.createdAt}
+            }
+        """.trimIndent()
+        SupabaseManager.insertOrUpdate("pharmacy_requests", payload)
+    }
 }

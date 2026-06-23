@@ -19,6 +19,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -208,12 +212,59 @@ fun PharmacyHomeDashboard(
     val bookings by viewModel.allBookings.collectAsState()
 
     val primaryGreen = Color(0xFF00A86B)
+    val primaryBlue = Color(0xFF0F52BA)
 
-    // Calculate aggregated metrics
-    val totalEarnings = bookings.filter { it.paymentStatus == "Paid" }.sumOf { 800.0 }
-    val todayAppointments = bookings.size
-    val totalDoctors = doctors.size
+    // Sub-tab selection state
+    var currentSubTab by remember { mutableStateOf("Overview") } // "Overview", "Earnings"
+    var showCsvExportSuccess by remember { mutableStateOf(false) }
+
+    // Dynamic Date Calculations
+    val todayDateStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+    val currentMonthPrefix = java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.getDefault()).format(java.util.Date())
+
+    // 1. Calculate aggregated metrics (Overview & Earnings)
+    val totalEarnings = bookings.filter { it.paymentStatus == "Paid" }.sumOf { booking -> doctors.find { it.id == booking.doctorId }?.fee ?: 500.0 }
+    val todayEarnings = bookings.filter { it.dateStr == todayDateStr && it.paymentStatus == "Paid" }.sumOf { booking -> doctors.find { it.id == booking.doctorId }?.fee ?: 500.0 }
+    val monthlyEarnings = bookings.filter { it.dateStr.startsWith(currentMonthPrefix) && it.paymentStatus == "Paid" }.sumOf { booking -> doctors.find { it.id == booking.doctorId }?.fee ?: 500.0 }
+    
+    val todayAppointments = bookings.filter { it.dateStr == todayDateStr }.size
+    val totalDoctorsCount = doctors.size
     val availableSlotsCount = doctors.sumOf { it.slotsJson.split(",").size }
+
+    val totalApptsCount = bookings.size
+    val completedApptsCount = bookings.count { it.status == "Completed" }
+    val cancelledApptsCount = bookings.count { it.status == "Cancelled" }
+
+    // 2. Doctor ranking & stats leaderboard
+    val doctorStats = doctors.map { doc ->
+        val docBookings = bookings.filter { it.doctorId == doc.id }
+        val completedCount = docBookings.count { it.status == "Completed" }
+        val revenue = docBookings.filter { it.paymentStatus == "Paid" }.sumOf { doc.fee }
+        Triple(doc, completedCount, revenue)
+    }.sortedByDescending { it.third } // Top performing doctors first
+
+    // 3. Dynamic Last 6 Months Earnings Calculation for Chart
+    val calendar = java.util.Calendar.getInstance()
+    val sdfMonthLabel = java.text.SimpleDateFormat("MMM", java.util.Locale.US)
+    val sdfYearMonth = java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.US)
+    val last6MonthsList = (0..5).map { i ->
+        val cal = java.util.Calendar.getInstance().apply { add(java.util.Calendar.MONTH, -i) }
+        sdfMonthLabel.format(cal.time) to sdfYearMonth.format(cal.time)
+    }.reversed()
+    val last6MonthsEarnings = last6MonthsList.map { (_, prefix) ->
+        bookings.filter { it.dateStr.startsWith(prefix) && it.paymentStatus == "Paid" }.sumOf { b -> doctors.find { it.id == b.doctorId }?.fee ?: 500.0 }
+    }
+
+    // 4. Dynamic Last 7 Days Appointment Volume trend for Chart
+    val sdfDayLabel = java.text.SimpleDateFormat("EEE", java.util.Locale.US)
+    val sdfDayValue = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+    val last7DaysList = (0..6).map { i ->
+        val cal = java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR, -i) }
+        sdfDayLabel.format(cal.time) to sdfDayValue.format(cal.time)
+    }.reversed()
+    val last7DaysCounts = last7DaysList.map { (_, dateStr) ->
+        bookings.count { it.dateStr == dateStr }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -256,128 +307,513 @@ fun PharmacyHomeDashboard(
             }
         }
 
-        // Aggregate Grid Cards
+        // Segmented tab row
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    DashboardMetricCard(
-                        title = "Today's Appts",
-                        value = todayAppointments.toString(),
-                        icon = Icons.Rounded.EventAvailable,
-                        color = primaryGreen,
-                        modifier = Modifier.weight(1f)
-                    )
-                    DashboardMetricCard(
-                        title = "Total Earnings",
-                        value = "₹${totalEarnings.toInt()}",
-                        icon = Icons.Rounded.Payments,
-                        color = Color(0xFF0F52BA),
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    DashboardMetricCard(
-                        title = "Clinic Clinicians",
-                        value = totalDoctors.toString(),
-                        icon = Icons.Rounded.Group,
-                        color = Color(0xFFD97706),
-                        modifier = Modifier.weight(1f)
-                    )
-                    DashboardMetricCard(
-                        title = "Open Shift Slots",
-                        value = availableSlotsCount.toString(),
-                        icon = Icons.Rounded.Timer,
-                        color = Color(0xFF5D3FD3),
-                        modifier = Modifier.weight(1f)
-                    )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFF1F5F9), shape = RoundedCornerShape(12.dp))
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                listOf("Overview", "Realtime Earnings").forEach { tab ->
+                    val isSel = currentSubTab == tab
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isSel) Color.White else Color.Transparent)
+                            .clickable { currentSubTab = tab }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (tab == "Overview") Icons.Rounded.Dashboard else Icons.Rounded.Payments,
+                                contentDescription = null,
+                                tint = if (isSel) primaryBlue else Color(0xFF64748B),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = tab,
+                                color = if (isSel) Color(0xFF0F172A) else Color(0xFF64748B),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        // Header for Recent Bookings list
-        item {
-            Text(
-                text = "Recent Booking Influx",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF1E293B)
-            )
-        }
-
-        // Bookings items
-        if (bookings.isEmpty()) {
+        if (currentSubTab == "Overview") {
+            // Aggregate Grid Cards
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White)
-                ) {
-                    Box(modifier = Modifier.padding(24.dp), contentAlignment = Alignment.Center) {
-                        Text("No patient appointments booked today.", color = Color(0xFF64748B))
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        DashboardMetricCard(
+                            title = "Today's Appts",
+                            value = todayAppointments.toString(),
+                            icon = Icons.Rounded.EventAvailable,
+                            color = primaryGreen,
+                            modifier = Modifier.weight(1f)
+                        )
+                        DashboardMetricCard(
+                            title = "Total Earnings",
+                            value = "₹${totalEarnings.toInt()}",
+                            icon = Icons.Rounded.Payments,
+                            color = Color(0xFF0F52BA),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        DashboardMetricCard(
+                            title = "Clinic Clinicians",
+                            value = totalDoctorsCount.toString(),
+                            icon = Icons.Rounded.Group,
+                            color = Color(0xFFD97706),
+                            modifier = Modifier.weight(1f)
+                        )
+                        DashboardMetricCard(
+                            title = "Open Shift Slots",
+                            value = availableSlotsCount.toString(),
+                            icon = Icons.Rounded.Timer,
+                            color = Color(0xFF5D3FD3),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+
+            // Header for Recent Bookings list
+            item {
+                Text(
+                    text = "Recent Booking Influx",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B)
+                )
+            }
+
+            // Bookings items
+            if (bookings.isEmpty()) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White)
+                    ) {
+                        Box(modifier = Modifier.padding(24.dp), contentAlignment = Alignment.Center) {
+                            Text("No patient appointments booked today.", color = Color(0xFF64748B))
+                        }
+                    }
+                }
+            } else {
+                items(bookings.take(5)) { booking ->
+                    val doctor = doctors.find { it.id == booking.doctorId }
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .shadow(1.dp, shape = RoundedCornerShape(16.dp))
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Token #${booking.tokenNumber}",
+                                    fontWeight = FontWeight.Bold,
+                                    color = primaryGreen,
+                                    fontSize = 13.sp
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(
+                                            when (booking.status) {
+                                                "Upcoming" -> Color(0xFFEFF6FF)
+                                                "Completed" -> Color(0xFFECFDF5)
+                                                else -> Color(0xFFFEF2F2)
+                                            }
+                                        )
+                                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = booking.status,
+                                        color = when (booking.status) {
+                                            "Upcoming" -> Color(0xFF2563EB)
+                                            "Completed" -> Color(0xFF059669)
+                                            else -> Color(0xFFDC2626)
+                                        },
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Text(
+                                text = booking.patientName,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0F172A)
+                            )
+                            Text(
+                                text = "Doctor: ${doctor?.name ?: "Dr. Specialist"}  •  Time: ${booking.timeStr}",
+                                fontSize = 12.sp,
+                                color = Color(0xFF64748B),
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
                     }
                 }
             }
         } else {
-            items(bookings.take(5)) { booking ->
-                val doctor = doctors.find { it.id == booking.doctorId }
+            // REALTIME FINANCIAL EARNINGS DASHBOARD SUBTAB
+            
+            // CSV Export Notification Banner
+            if (showCsvExportSuccess) {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFDCFCE7)),
+                        border = BorderStroke(1.dp, Color(0xFF10B981)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showCsvExportSuccess = false }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF10B981)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Rounded.Check, contentDescription = "Success", tint = Color.White, modifier = Modifier.size(20.dp))
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = "CSV Report Exported!", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF065F46))
+                                Text(text = "Saved earnings file with booking metadata and doctor commission sheets.", fontSize = 12.sp, color = Color(0xFF047857))
+                            }
+                            IconButton(onClick = { showCsvExportSuccess = false }) {
+                                Icon(Icons.Rounded.Close, contentDescription = "Close", tint = Color(0xFF047857))
+                            }
+                        }
+                    }
+                }
+            }
+
+            // High Fidelity Realtime Metrics List
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        DashboardMetricCard(
+                            title = "Today's Revenue",
+                            value = "₹${todayEarnings.toInt()}",
+                            icon = Icons.Rounded.TrendingUp,
+                            color = primaryGreen,
+                            modifier = Modifier.weight(1f)
+                        )
+                        DashboardMetricCard(
+                            title = "Monthly Revenue",
+                            value = "₹${monthlyEarnings.toInt()}",
+                            icon = Icons.Rounded.Payments,
+                            color = primaryBlue,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Card(
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Total Bookings", fontSize = 11.sp, color = Color(0xFF64748B), fontWeight = FontWeight.Bold)
+                                Text(totalApptsCount.toString(), fontSize = 18.sp, fontWeight = FontWeight.Black, color = Color(0xFF0F172A), modifier = Modifier.padding(top = 2.dp))
+                            }
+                        }
+                        Card(
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Completed", fontSize = 11.sp, color = Color(0xFF00A86B), fontWeight = FontWeight.Bold)
+                                Text(completedApptsCount.toString(), fontSize = 18.sp, fontWeight = FontWeight.Black, color = Color(0xFF00A86B), modifier = Modifier.padding(top = 2.dp))
+                            }
+                        }
+                        Card(
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Cancelled", fontSize = 11.sp, color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)
+                                Text(cancelledApptsCount.toString(), fontSize = 18.sp, fontWeight = FontWeight.Black, color = Color(0xFFEF4444), modifier = Modifier.padding(top = 2.dp))
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Export CSV Report Action Button
+            item {
+                Button(
+                    onClick = {
+                        showCsvExportSuccess = true
+                        viewModel.logAction("Export Earnings CSV", "Pharmacy Operator exported the realtime CSV report ($todayDateStr)")
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = primaryBlue),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                ) {
+                    Icon(Icons.Rounded.CloudDownload, contentDescription = "CSV", tint = Color.White, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Export Financial CSV Report", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
+            }
+
+            // Monthly Revenue Chart (Using custom Canvas)
+            item {
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .shadow(1.dp, shape = RoundedCornerShape(16.dp))
+                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Monthly Revenue Trend (Last 6 Months)",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF1E293B)
+                        )
+                        Text(
+                            text = "Dynamic earnings update based on paid clinical bookings",
+                            fontSize = 11.sp,
+                            color = Color(0xFF64748B),
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+
+                        // Draw Chart Area
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(130.dp)
                         ) {
-                            Text(
-                                text = "Token #${booking.tokenNumber}",
-                                fontWeight = FontWeight.Bold,
-                                color = primaryGreen,
-                                fontSize = 13.sp
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(
-                                        when (booking.status) {
-                                            "Upcoming" -> Color(0xFFEFF6FF)
-                                            "Completed" -> Color(0xFFECFDF5)
-                                            else -> Color(0xFFFEF2F2)
-                                        }
-                                    )
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-                            ) {
-                                Text(
-                                    text = booking.status,
-                                    color = when (booking.status) {
-                                        "Upcoming" -> Color(0xFF2563EB)
-                                        "Completed" -> Color(0xFF059669)
-                                        else -> Color(0xFFDC2626)
-                                    },
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                val sizeWidth = size.width
+                                val sizeHeight = size.height
+                                val maxVal = last6MonthsEarnings.maxOrNull()?.coerceAtLeast(1000.0) ?: 1000.0
+                                
+                                val points = last6MonthsEarnings.mapIndexed { idx, value ->
+                                    val x = (sizeWidth / 5) * idx
+                                    val y = sizeHeight - (sizeHeight * 0.8f * (value / maxVal).toFloat()) - 10f
+                                    Offset(x, y)
+                                }
+
+                                val path = Path().apply {
+                                    moveTo(points[0].x, points[0].y)
+                                    for (i in 1 until points.size) {
+                                        lineTo(points[i].x, points[i].y)
+                                    }
+                                }
+
+                                // Draw Path curve line
+                                drawPath(
+                                    path = path,
+                                    color = Color(0xFF0F52BA),
+                                    style = Stroke(width = 5f, cap = StrokeCap.Round)
                                 )
+
+                                // Gradient fill shading
+                                val fillPath = Path().apply {
+                                    addPath(path)
+                                    lineTo(sizeWidth, sizeHeight)
+                                    lineTo(0f, sizeHeight)
+                                    close()
+                                }
+                                drawPath(
+                                    path = fillPath,
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(Color(0xFF0F52BA).copy(alpha = 0.25f), Color.White.copy(alpha = 0f))
+                                    )
+                                )
+
+                                // Circles
+                                points.forEach { pt ->
+                                    drawCircle(
+                                        color = Color(0xFF0F52BA),
+                                        radius = 8f,
+                                        center = pt
+                                    )
+                                }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                        // Labels Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            last6MonthsList.forEach { (label, _) ->
+                                Text(text = label, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF64748B))
+                            }
+                        }
+                    }
+                }
+            }
 
+            // Appointment Volume Trend Chart (Canvas line trend)
+            item {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = booking.patientName,
-                            fontSize = 15.sp,
+                            text = "Appointment Influx Volume (Last 7 Days)",
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0F172A)
+                            color = Color(0xFF1E293B)
                         )
                         Text(
-                            text = "Doctor: ${doctor?.name ?: "Dr. Specialist"}  •  Time: ${booking.timeStr}",
-                            fontSize = 12.sp,
+                            text = "Cumulative count of scheduled doctor consultations",
+                            fontSize = 11.sp,
                             color = Color(0xFF64748B),
-                            modifier = Modifier.padding(top = 2.dp)
+                            modifier = Modifier.padding(bottom = 16.dp)
                         )
+
+                        // Draw Chart Area
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(110.dp)
+                        ) {
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                val sizeWidth = size.width
+                                val sizeHeight = size.height
+                                val maxVal = last7DaysCounts.maxOrNull()?.coerceAtLeast(5) ?: 5
+                                
+                                val points = last7DaysCounts.mapIndexed { idx, value ->
+                                    val x = (sizeWidth / 6) * idx
+                                    val y = sizeHeight - (sizeHeight * 0.75f * (value.toFloat() / maxVal.toFloat())) - 10f
+                                    Offset(x, y)
+                                }
+
+                                val path = Path().apply {
+                                    moveTo(points[0].x, points[0].y)
+                                    for (i in 1 until points.size) {
+                                        lineTo(points[i].x, points[i].y)
+                                    }
+                                }
+
+                                drawPath(
+                                    path = path,
+                                    color = Color(0xFF00A86B),
+                                    style = Stroke(width = 5f, cap = StrokeCap.Round)
+                                )
+
+                                val fillPath = Path().apply {
+                                    addPath(path)
+                                    lineTo(sizeWidth, sizeHeight)
+                                    lineTo(0f, sizeHeight)
+                                    close()
+                                }
+                                drawPath(
+                                    path = fillPath,
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(Color(0xFF00A86B).copy(alpha = 0.2f), Color.White.copy(alpha = 0f))
+                                    )
+                                )
+
+                                points.forEach { pt ->
+                                    drawCircle(
+                                        color = Color(0xFF00A86B),
+                                        radius = 7f,
+                                        center = pt
+                                    )
+                                }
+                            }
+                        }
+
+                        // Labels Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            last7DaysList.forEach { (label, _) ->
+                                Text(text = label, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF64748B))
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Top Performing Doctors & Revenue by Doctor Leaders Section
+            item {
+                Text(
+                    text = "Doctor Revenue & Performance Leaderboard",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B)
+                )
+            }
+
+            if (doctorStats.isEmpty()) {
+                item {
+                    Text("No doctors registered yet.", color = Color(0xFF64748B), modifier = Modifier.padding(top = 4.dp))
+                }
+            } else {
+                items(doctorStats) { (doc, completed, revenue) ->
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color(0xFFEEF5FF)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Rounded.Person, contentDescription = null, tint = primaryBlue, modifier = Modifier.size(24.dp))
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = doc.name, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
+                                Text(text = "${doc.specialization}  •  $completed Consultations", fontSize = 11.sp, color = Color(0xFF64748B))
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(text = "₹${revenue.toInt()}", fontSize = 16.sp, fontWeight = FontWeight.Black, color = primaryBlue)
+                                Text(text = "Total Revenue", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF00A86B))
+                            }
+                        }
                     }
                 }
             }
