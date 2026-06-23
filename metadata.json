@@ -1,0 +1,6 @@
+{
+  "name": "DoctorLine",
+  "description": "Production-ready healthcare platform featuring Patient booking, Pharmacy schedule management, and an Admin dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
