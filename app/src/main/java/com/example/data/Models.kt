@@ -29,7 +29,10 @@ data class PharmacyEntity(
     val subscriptionStart: String = "2026-06-22",
     val subscriptionExpiry: String = "2026-07-22",
     val subscriptionAmount: Double = 499.0,
-    val subscriptionPaymentStatus: String = "Paid"
+    val subscriptionPaymentStatus: String = "Paid",
+    val trialStarted: Boolean = false,
+    val trialStartDate: String = "",
+    val trialEndDate: String = ""
 )
 
 @Entity(tableName = "doctors")
@@ -47,7 +50,11 @@ data class DoctorEntity(
     val photoUrl: String = "",
     val bio: String = "Dedicated health professional focused on high-quality patient outcomes and modern diagnostics.",
     val degree: String = "MBBS, MD",
-    val languages: String = "English, Hindi, Bengali"
+    val languages: String = "English, Hindi, Bengali",
+    val isSoftDeleted: Boolean = false,
+    val availabilityStatus: String = "Available", // "Available", "Running Late", "On Holiday"
+    val expectedStartTime: String = "",
+    val delayReason: String = ""
 )
 
 @Entity(tableName = "schedules")
@@ -137,8 +144,29 @@ data class PharmacyRequestEntity(
     val address: String,
     val licenseImage: String,
     val pharmacyPhoto: String?,
-    val status: String = "pending", // "pending", "approved", "rejected"
+    val status: String = "pending", // "pending", "approved", "rejected", "pending_verification", "correction_requested"
     val approvedAt: Long? = null,
     val approvedBy: String? = null,
+    val paymentId: String? = null,
+    val paymentStatus: String? = null,
+    val paymentAmount: Double? = null,
+    val paymentDate: Long? = null,
     val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "favourite_doctors")
+data class FavouriteDoctorEntity(
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val patientId: String,
+    val doctorId: String,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "pricing_settings")
+data class PricingSettingsEntity(
+    @PrimaryKey val id: String = "default_pricing",
+    val registrationFee: Double = 10.0,
+    val monthlySubscriptionFee: Double = 10.0,
+    val quarterlySubscriptionFee: Double = 30.0,
+    val yearlySubscriptionFee: Double = 100.0
 )

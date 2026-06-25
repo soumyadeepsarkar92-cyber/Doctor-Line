@@ -30,8 +30,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import kotlinx.coroutines.launch
 import com.example.data.*
 import com.example.ui.MainViewModel
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.user.UserUpdateBuilder
 
 // ============================================
 // MAIN PHARMACY MODULE SCREEN (GREEN THEME)
@@ -97,16 +102,23 @@ fun PharmacyModuleScreen(
     val activeUser by viewModel.activeUser.collectAsState()
     val pharmacies by viewModel.allPharmacies.collectAsState()
     
-    val myPharmacy = pharmacies.find { it.id == "phar_apollo" }
+    val myPharmacy = pharmacies.find { it.id == activeUser?.id } ?: pharmacies.firstOrNull()
     val isSuspended = myPharmacy?.status == "Suspended"
 
     val primaryGreen = Color(0xFF00A86B)
     val lightGreenBackground = Color(0xFFEFFDF5)
 
+    val activeTheme by viewModel.appTheme.collectAsState()
+    val isDark = when (activeTheme) {
+        "Dark" -> true
+        "Light" -> false
+        else -> androidx.compose.foundation.isSystemInDarkTheme()
+    }
+
     Scaffold(
         bottomBar = {
             NavigationBar(
-                containerColor = Color.White,
+                containerColor = if (isDark) Color(0xFF1E293B) else Color.White,
                 tonalElevation = 8.dp,
                 modifier = Modifier.navigationBarsPadding()
             ) {
@@ -116,11 +128,11 @@ fun PharmacyModuleScreen(
                     icon = { Icon(Icons.Rounded.Dashboard, contentDescription = "Dashboard") },
                     label = { Text("Home", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = primaryGreen,
-                        selectedTextColor = primaryGreen,
-                        indicatorColor = Color(0xFFDCFCE7),
-                        unselectedIconColor = Color(0xFF64748B),
-                        unselectedTextColor = Color(0xFF64748B)
+                        selectedIconColor = if (isDark) Color(0xFF34D399) else primaryGreen,
+                        selectedTextColor = if (isDark) Color(0xFF34D399) else primaryGreen,
+                        indicatorColor = if (isDark) Color(0xFF065F46) else Color(0xFFDCFCE7),
+                        unselectedIconColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                        unselectedTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
                     )
                 )
                 NavigationBarItem(
@@ -129,11 +141,11 @@ fun PharmacyModuleScreen(
                     icon = { Icon(Icons.Rounded.Healing, contentDescription = "Doctors") },
                     label = { Text("Doctors", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = primaryGreen,
-                        selectedTextColor = primaryGreen,
-                        indicatorColor = Color(0xFFDCFCE7),
-                        unselectedIconColor = Color(0xFF64748B),
-                        unselectedTextColor = Color(0xFF64748B)
+                        selectedIconColor = if (isDark) Color(0xFF34D399) else primaryGreen,
+                        selectedTextColor = if (isDark) Color(0xFF34D399) else primaryGreen,
+                        indicatorColor = if (isDark) Color(0xFF065F46) else Color(0xFFDCFCE7),
+                        unselectedIconColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                        unselectedTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
                     )
                 )
                 NavigationBarItem(
@@ -142,11 +154,11 @@ fun PharmacyModuleScreen(
                     icon = { Icon(Icons.Rounded.CalendarMonth, contentDescription = "Schedule") },
                     label = { Text("Shifts", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = primaryGreen,
-                        selectedTextColor = primaryGreen,
-                        indicatorColor = Color(0xFFDCFCE7),
-                        unselectedIconColor = Color(0xFF64748B),
-                        unselectedTextColor = Color(0xFF64748B)
+                        selectedIconColor = if (isDark) Color(0xFF34D399) else primaryGreen,
+                        selectedTextColor = if (isDark) Color(0xFF34D399) else primaryGreen,
+                        indicatorColor = if (isDark) Color(0xFF065F46) else Color(0xFFDCFCE7),
+                        unselectedIconColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                        unselectedTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
                     )
                 )
                 NavigationBarItem(
@@ -155,11 +167,11 @@ fun PharmacyModuleScreen(
                     icon = { Icon(Icons.Rounded.Assignment, contentDescription = "Appointments") },
                     label = { Text("Slots", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = primaryGreen,
-                        selectedTextColor = primaryGreen,
-                        indicatorColor = Color(0xFFDCFCE7),
-                        unselectedIconColor = Color(0xFF64748B),
-                        unselectedTextColor = Color(0xFF64748B)
+                        selectedIconColor = if (isDark) Color(0xFF34D399) else primaryGreen,
+                        selectedTextColor = if (isDark) Color(0xFF34D399) else primaryGreen,
+                        indicatorColor = if (isDark) Color(0xFF065F46) else Color(0xFFDCFCE7),
+                        unselectedIconColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                        unselectedTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
                     )
                 )
                 NavigationBarItem(
@@ -171,14 +183,20 @@ fun PharmacyModuleScreen(
                         selectedIconColor = Color(0xFF6C5DD3), // Unique purple for plans
                         selectedTextColor = Color(0xFF6C5DD3),
                         indicatorColor = Color(0xFFF3E8FF),
-                        unselectedIconColor = Color(0xFF64748B),
-                        unselectedTextColor = Color(0xFF64748B)
+                        unselectedIconColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                        unselectedTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
                     )
                 )
             }
         },
-        containerColor = Color.White
+        containerColor = if (isDark) Color(0xFF0F172A) else Color.White
     ) { innerPadding ->
+        val todayStr = remember(pharmacies) { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date()) }
+        val expiryStr = myPharmacy?.subscriptionExpiry ?: ""
+        val daysRemaining = if (expiryStr.isNotEmpty()) viewModel.calculateDaysBetween(todayStr, expiryStr) else 30L
+        val isGracePeriod = daysRemaining < 0 && daysRemaining > -5
+        val graceDaysLeft = 5 + daysRemaining
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -187,12 +205,54 @@ fun PharmacyModuleScreen(
             if (isSuspended && selectedBottomTab != "subscription") {
                 SuspendedPharmacyBlocker()
             } else {
-                when (selectedBottomTab) {
-                    "dashboard" -> PharmacyHomeDashboard(viewModel = viewModel, logout = logout)
-                    "doctors" -> PharmacyDoctorsScreen(viewModel = viewModel)
-                    "schedules" -> PharmacyScheduleScreen(viewModel = viewModel)
-                    "bookings" -> PharmacyAppointmentsListScreen(viewModel = viewModel)
-                    "subscription" -> PharmacySubscriptionScreen(viewModel = viewModel)
+                Column(modifier = Modifier.fillMaxSize()) {
+                    if (isGracePeriod) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF2F2)),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFCA5A5))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Warning,
+                                    contentDescription = "Warning",
+                                    tint = Color(0xFFEF4444),
+                                    modifier = Modifier.padding(end = 12.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = "Your subscription has expired.",
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF991B1B),
+                                        fontSize = 14.sp
+                                    )
+                                    Text(
+                                        text = "Grace period remaining: $graceDaysLeft days.",
+                                        color = Color(0xFFB91C1C),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Box(modifier = Modifier.weight(1f)) {
+                        when (selectedBottomTab) {
+                            "dashboard" -> PharmacyHomeDashboard(viewModel = viewModel, logout = logout)
+                            "doctors" -> PharmacyDoctorsScreen(viewModel = viewModel)
+                            "schedules" -> PharmacyScheduleScreen(viewModel = viewModel)
+                            "bookings" -> PharmacyAppointmentsListScreen(viewModel = viewModel)
+                            "subscription" -> PharmacySubscriptionScreen(viewModel = viewModel)
+                        }
+                    }
                 }
             }
         }
@@ -210,9 +270,22 @@ fun PharmacyHomeDashboard(
     val activeUser by viewModel.activeUser.collectAsState()
     val doctors by viewModel.allDoctors.collectAsState()
     val bookings by viewModel.allBookings.collectAsState()
+    val pharmacies by viewModel.allPharmacies.collectAsState()
+
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     val primaryGreen = Color(0xFF00A86B)
     val primaryBlue = Color(0xFF0F52BA)
+
+    val activeTheme by viewModel.appTheme.collectAsState()
+    val isDark = when (activeTheme) {
+        "Dark" -> true
+        "Light" -> false
+        else -> androidx.compose.foundation.isSystemInDarkTheme()
+    }
+
+    var showChangePasswordDialog by remember { mutableStateOf(false) }
 
     // Sub-tab selection state
     var currentSubTab by remember { mutableStateOf("Overview") } // "Overview", "Earnings"
@@ -222,22 +295,34 @@ fun PharmacyHomeDashboard(
     val todayDateStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
     val currentMonthPrefix = java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.getDefault()).format(java.util.Date())
 
-    // 1. Calculate aggregated metrics (Overview & Earnings)
-    val totalEarnings = bookings.filter { it.paymentStatus == "Paid" }.sumOf { booking -> doctors.find { it.id == booking.doctorId }?.fee ?: 500.0 }
-    val todayEarnings = bookings.filter { it.dateStr == todayDateStr && it.paymentStatus == "Paid" }.sumOf { booking -> doctors.find { it.id == booking.doctorId }?.fee ?: 500.0 }
-    val monthlyEarnings = bookings.filter { it.dateStr.startsWith(currentMonthPrefix) && it.paymentStatus == "Paid" }.sumOf { booking -> doctors.find { it.id == booking.doctorId }?.fee ?: 500.0 }
-    
-    val todayAppointments = bookings.filter { it.dateStr == todayDateStr }.size
-    val totalDoctorsCount = doctors.size
-    val availableSlotsCount = doctors.sumOf { it.slotsJson.split(",").size }
+    // Security: Filter only own non-deleted doctors and bookings
+    val myDoctors = if (activeUser?.role == "Pharmacy") {
+        doctors.filter { it.pharmacyId == activeUser?.id && !it.isSoftDeleted }
+    } else {
+        doctors.filter { !it.isSoftDeleted }
+    }
+    val myBookings = if (activeUser?.role == "Pharmacy") {
+        bookings.filter { booking -> myDoctors.any { it.id == booking.doctorId } }
+    } else {
+        bookings
+    }
 
-    val totalApptsCount = bookings.size
-    val completedApptsCount = bookings.count { it.status == "Completed" }
-    val cancelledApptsCount = bookings.count { it.status == "Cancelled" }
+    // 1. Calculate aggregated metrics (Overview & Earnings)
+    val totalEarnings = myBookings.filter { it.paymentStatus == "Paid" }.sumOf { booking -> myDoctors.find { it.id == booking.doctorId }?.fee ?: 500.0 }
+    val todayEarnings = myBookings.filter { it.dateStr == todayDateStr && it.paymentStatus == "Paid" }.sumOf { booking -> myDoctors.find { it.id == booking.doctorId }?.fee ?: 500.0 }
+    val monthlyEarnings = myBookings.filter { it.dateStr.startsWith(currentMonthPrefix) && it.paymentStatus == "Paid" }.sumOf { booking -> myDoctors.find { it.id == booking.doctorId }?.fee ?: 500.0 }
+    
+    val todayAppointments = myBookings.filter { it.dateStr == todayDateStr }.size
+    val totalDoctorsCount = myDoctors.size
+    val availableSlotsCount = myDoctors.sumOf { it.slotsJson.split(",").size }
+
+    val totalApptsCount = myBookings.size
+    val completedApptsCount = myBookings.count { it.status == "Completed" }
+    val cancelledApptsCount = myBookings.count { it.status == "Cancelled" }
 
     // 2. Doctor ranking & stats leaderboard
-    val doctorStats = doctors.map { doc ->
-        val docBookings = bookings.filter { it.doctorId == doc.id }
+    val doctorStats = myDoctors.map { doc ->
+        val docBookings = myBookings.filter { it.doctorId == doc.id }
         val completedCount = docBookings.count { it.status == "Completed" }
         val revenue = docBookings.filter { it.paymentStatus == "Paid" }.sumOf { doc.fee }
         Triple(doc, completedCount, revenue)
@@ -252,7 +337,7 @@ fun PharmacyHomeDashboard(
         sdfMonthLabel.format(cal.time) to sdfYearMonth.format(cal.time)
     }.reversed()
     val last6MonthsEarnings = last6MonthsList.map { (_, prefix) ->
-        bookings.filter { it.dateStr.startsWith(prefix) && it.paymentStatus == "Paid" }.sumOf { b -> doctors.find { it.id == b.doctorId }?.fee ?: 500.0 }
+        myBookings.filter { it.dateStr.startsWith(prefix) && it.paymentStatus == "Paid" }.sumOf { b -> myDoctors.find { it.id == b.doctorId }?.fee ?: 500.0 }
     }
 
     // 4. Dynamic Last 7 Days Appointment Volume trend for Chart
@@ -263,13 +348,13 @@ fun PharmacyHomeDashboard(
         sdfDayLabel.format(cal.time) to sdfDayValue.format(cal.time)
     }.reversed()
     val last7DaysCounts = last7DaysList.map { (_, dateStr) ->
-        bookings.count { it.dateStr == dateStr }
+        myBookings.count { it.dateStr == dateStr }
     }
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF8FAFC)),
+            .background(if (isDark) Color(0xFF0F172A) else Color(0xFFF8FAFC)),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -282,7 +367,7 @@ fun PharmacyHomeDashboard(
             ) {
                 Column {
                     Text(
-                        text = "Apollo Pharmacy Hub",
+                        text = activeUser?.name ?: "Apollo Pharmacy Hub",
                         fontSize = 13.sp,
                         color = primaryGreen,
                         fontWeight = FontWeight.Bold
@@ -291,18 +376,41 @@ fun PharmacyHomeDashboard(
                         text = "Good Day, Operator",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Black,
-                        color = Color(0xFF0F172A)
+                        color = if (isDark) Color.White else Color(0xFF0F172A)
                     )
                 }
 
-                IconButton(
-                    onClick = logout,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFFEF2F2))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Rounded.Logout, contentDescription = "Logout", tint = Color(0xFFEF4444))
+                    // Theme Toggle Button
+                    IconButton(
+                        onClick = {
+                            val nextTheme = if (isDark) "Light" else "Dark"
+                            viewModel.updateTheme(nextTheme)
+                        },
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9))
+                    ) {
+                        Icon(
+                            imageVector = if (isDark) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
+                            contentDescription = "Toggle Theme Mode",
+                            tint = if (isDark) Color.White else Color(0xFF64748B)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = logout,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFFEF2F2))
+                    ) {
+                        Icon(Icons.Rounded.Logout, contentDescription = "Logout", tint = Color(0xFFEF4444))
+                    }
                 }
             }
         }
@@ -312,7 +420,7 @@ fun PharmacyHomeDashboard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFFF1F5F9), shape = RoundedCornerShape(12.dp))
+                    .background(if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9), shape = RoundedCornerShape(12.dp))
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -322,7 +430,7 @@ fun PharmacyHomeDashboard(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(10.dp))
-                            .background(if (isSel) Color.White else Color.Transparent)
+                            .background(if (isSel) (if (isDark) Color(0xFF334155) else Color.White) else Color.Transparent)
                             .clickable { currentSubTab = tab }
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
@@ -331,13 +439,13 @@ fun PharmacyHomeDashboard(
                             Icon(
                                 imageVector = if (tab == "Overview") Icons.Rounded.Dashboard else Icons.Rounded.Payments,
                                 contentDescription = null,
-                                tint = if (isSel) primaryBlue else Color(0xFF64748B),
+                                tint = if (isSel) (if (isDark) Color(0xFF34D399) else primaryBlue) else Color(0xFF64748B),
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = tab,
-                                color = if (isSel) Color(0xFF0F172A) else Color(0xFF64748B),
+                                color = if (isSel) (if (isDark) Color.White else Color(0xFF0F172A)) else Color(0xFF64748B),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp
                             )
@@ -347,41 +455,283 @@ fun PharmacyHomeDashboard(
             }
         }
 
-        if (currentSubTab == "Overview") {
-            // Aggregate Grid Cards
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        DashboardMetricCard(
-                            title = "Today's Appts",
-                            value = todayAppointments.toString(),
-                            icon = Icons.Rounded.EventAvailable,
-                            color = primaryGreen,
-                            modifier = Modifier.weight(1f)
-                        )
-                        DashboardMetricCard(
-                            title = "Total Earnings",
-                            value = "₹${totalEarnings.toInt()}",
-                            icon = Icons.Rounded.Payments,
-                            color = Color(0xFF0F52BA),
-                            modifier = Modifier.weight(1f)
-                        )
+        // Quick Security Actions (Change Password Option)
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showChangePasswordDialog = true },
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isDark) Color(0xFF1E293B) else Color.White
+                ),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp, 
+                    if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF3B82F6).copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.VpnKey,
+                                contentDescription = null,
+                                tint = Color(0xFF3B82F6),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Security & Console Passwords",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isDark) Color.White else Color(0xFF0F172A)
+                            )
+                            Text(
+                                text = "Keep your account safe by updating your credential secret keys",
+                                fontSize = 11.sp,
+                                color = Color(0xFF94A3B8)
+                            )
+                        }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        DashboardMetricCard(
-                            title = "Clinic Clinicians",
-                            value = totalDoctorsCount.toString(),
-                            icon = Icons.Rounded.Group,
-                            color = Color(0xFFD97706),
-                            modifier = Modifier.weight(1f)
-                        )
-                        DashboardMetricCard(
-                            title = "Open Shift Slots",
-                            value = availableSlotsCount.toString(),
-                            icon = Icons.Rounded.Timer,
-                            color = Color(0xFF5D3FD3),
-                            modifier = Modifier.weight(1f)
-                        )
+                    Icon(
+                        imageVector = Icons.Rounded.ChevronRight,
+                        contentDescription = null,
+                        tint = Color(0xFF94A3B8),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+
+        if (currentSubTab == "Overview") {
+            // Premium Green Glass Dashboard
+            item {
+                val glassBg = if (isDark) Color(0xFF064E3B).copy(alpha = 0.5f) else Color(0xFFECFDF5).copy(alpha = 0.85f)
+                val glassBorder = if (isDark) Color(0xFF10B981).copy(alpha = 0.4f) else Color(0xFF10B981).copy(alpha = 0.3f)
+                val glassText = if (isDark) Color(0xFFA7F3D0) else Color(0xFF064E3B)
+                val glassSubText = if (isDark) Color(0xFF34D399) else Color(0xFF047857)
+
+                val myPharmacy = pharmacies.find { it.id == activeUser?.id } ?: pharmacies.firstOrNull()
+                val subPlan = myPharmacy?.subscriptionPlan ?: "Standard Professional"
+                val expiryStr = myPharmacy?.subscriptionExpiry ?: todayDateStr
+                val daysRemaining = try {
+                    viewModel.calculateDaysBetween(todayDateStr, expiryStr)
+                } catch(e: Exception) {
+                    30L
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    // 1. Subscription Status (Hero Glass Card)
+                    Card(
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = glassBg),
+                        border = BorderStroke(1.5.dp, glassBorder),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .shadow(2.dp, shape = RoundedCornerShape(20.dp))
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(if (isDark) Color(0xFF047857) else Color(0xFFD1FAE5)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Verified,
+                                            contentDescription = null,
+                                            tint = if (isDark) Color(0xFF34D399) else Color(0xFF059669),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            text = "SUBSCRIPTION STATUS",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = glassSubText
+                                        )
+                                        Text(
+                                            text = subPlan,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Black,
+                                            color = glassText
+                                        )
+                                    }
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (myPharmacy?.trialStarted == true) Color(0xFF3B82F6) else Color(0xFF10B981))
+                                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = if (myPharmacy?.trialStarted == true) "Trial Active" else "Active",
+                                        color = Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            HorizontalDivider(color = glassBorder.copy(alpha = 0.2f), thickness = 1.dp, modifier = Modifier.padding(vertical = 12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column {
+                                    Text("EXPIRY DATE", fontSize = 9.sp, color = glassSubText, fontWeight = FontWeight.Bold)
+                                    Text(expiryStr, fontSize = 12.sp, color = glassText, fontWeight = FontWeight.Bold)
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text("DAYS REMAINING", fontSize = 9.sp, color = glassSubText, fontWeight = FontWeight.Bold)
+                                    Text("$daysRemaining Days Left", fontSize = 12.sp, color = glassText, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+
+                    // 2. Earnings metrics (Today's Earnings & Monthly Earnings Row)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Card(
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = glassBg),
+                            border = BorderStroke(1.2.dp, glassBorder),
+                            modifier = Modifier
+                                .weight(1f)
+                                .shadow(1.dp, shape = RoundedCornerShape(18.dp))
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Icon(Icons.Rounded.Payments, contentDescription = null, tint = if (isDark) Color(0xFF34D399) else Color(0xFF059669), modifier = Modifier.size(22.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text("TODAY'S REVENUE", fontSize = 9.sp, color = glassSubText, fontWeight = FontWeight.Bold)
+                                Text("₹${todayEarnings.toInt()}", fontSize = 18.sp, color = glassText, fontWeight = FontWeight.Black)
+                            }
+                        }
+                        Card(
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = glassBg),
+                            border = BorderStroke(1.2.dp, glassBorder),
+                            modifier = Modifier
+                                .weight(1f)
+                                .shadow(1.dp, shape = RoundedCornerShape(18.dp))
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Icon(Icons.Rounded.MonetizationOn, contentDescription = null, tint = if (isDark) Color(0xFF34D399) else Color(0xFF059669), modifier = Modifier.size(22.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text("MONTHLY REVENUE", fontSize = 9.sp, color = glassSubText, fontWeight = FontWeight.Bold)
+                                Text("₹${monthlyEarnings.toInt()}", fontSize = 18.sp, color = glassText, fontWeight = FontWeight.Black)
+                            }
+                        }
+                    }
+
+                    // 3. Queue & Active Clinicians
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        val todayBookings = myBookings.filter { it.dateStr == todayDateStr }
+                        val completedToday = todayBookings.count { it.status == "Completed" }
+                        val pendingToday = todayBookings.count { it.status == "Upcoming" || it.status == "Confirmed" }
+
+                        Card(
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = glassBg),
+                            border = BorderStroke(1.2.dp, glassBorder),
+                            modifier = Modifier
+                                .weight(1f)
+                                .shadow(1.dp, shape = RoundedCornerShape(18.dp))
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Icon(Icons.Rounded.People, contentDescription = null, tint = if (isDark) Color(0xFF34D399) else Color(0xFF059669), modifier = Modifier.size(22.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text("TODAY'S QUEUE", fontSize = 9.sp, color = glassSubText, fontWeight = FontWeight.Bold)
+                                Text("$todayAppointments Patients", fontSize = 16.sp, color = glassText, fontWeight = FontWeight.Black)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("$completedToday Done | $pendingToday Wait", fontSize = 10.sp, color = glassSubText, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                        Card(
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = glassBg),
+                            border = BorderStroke(1.2.dp, glassBorder),
+                            modifier = Modifier
+                                .weight(1f)
+                                .shadow(1.dp, shape = RoundedCornerShape(18.dp))
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Icon(Icons.Rounded.Group, contentDescription = null, tint = if (isDark) Color(0xFF34D399) else Color(0xFF059669), modifier = Modifier.size(22.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text("ACTIVE CLINICIANS", fontSize = 9.sp, color = glassSubText, fontWeight = FontWeight.Bold)
+                                Text("${myDoctors.count { it.availabilityStatus != "On Holiday" }} Doctors Active", fontSize = 16.sp, color = glassText, fontWeight = FontWeight.Black)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("$totalDoctorsCount Registered Total", fontSize = 10.sp, color = glassSubText, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                    }
+
+                    // 4. Appointment Status Overview Panel (Visual Green Glass Segment)
+                    Card(
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = glassBg),
+                        border = BorderStroke(1.2.dp, glassBorder),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .shadow(1.dp, shape = RoundedCornerShape(18.dp))
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "Appointment Fulfillment Overview",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = glassText
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                                    Text("COMPLETED", fontSize = 9.sp, color = glassSubText, fontWeight = FontWeight.Bold)
+                                    Text(completedApptsCount.toString(), fontSize = 16.sp, color = glassText, fontWeight = FontWeight.Black)
+                                }
+                                Box(modifier = Modifier.width(1.dp).height(24.dp).background(glassBorder.copy(alpha = 0.3f)))
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                                    Text("UPCOMING", fontSize = 9.sp, color = glassSubText, fontWeight = FontWeight.Bold)
+                                    val upcomingCount = myBookings.count { it.status == "Upcoming" || it.status == "Confirmed" }
+                                    Text(upcomingCount.toString(), fontSize = 16.sp, color = glassText, fontWeight = FontWeight.Black)
+                                }
+                                Box(modifier = Modifier.width(1.dp).height(24.dp).background(glassBorder.copy(alpha = 0.3f)))
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                                    Text("CANCELLED", fontSize = 9.sp, color = glassSubText, fontWeight = FontWeight.Bold)
+                                    Text(cancelledApptsCount.toString(), fontSize = 16.sp, color = glassText, fontWeight = FontWeight.Black)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -436,9 +786,11 @@ fun PharmacyHomeDashboard(
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(
                                             when (booking.status) {
-                                                "Upcoming" -> Color(0xFFEFF6FF)
-                                                "Completed" -> Color(0xFFECFDF5)
-                                                else -> Color(0xFFFEF2F2)
+                                                "Upcoming", "Confirmed" -> Color(0xFFECFDF5)
+                                                "Waiting" -> Color(0xFFFEF3C7)
+                                                "Cancelled" -> Color(0xFFFEF2F2)
+                                                "Completed" -> Color(0xFFEFF6FF)
+                                                else -> Color(0xFFECFDF5)
                                             }
                                         )
                                         .padding(horizontal = 10.dp, vertical = 4.dp)
@@ -446,9 +798,11 @@ fun PharmacyHomeDashboard(
                                     Text(
                                         text = booking.status,
                                         color = when (booking.status) {
-                                            "Upcoming" -> Color(0xFF2563EB)
-                                            "Completed" -> Color(0xFF059669)
-                                            else -> Color(0xFFDC2626)
+                                            "Upcoming", "Confirmed" -> Color(0xFF059669)
+                                            "Waiting" -> Color(0xFFD97706)
+                                            "Cancelled" -> Color(0xFFDC2626)
+                                            "Completed" -> Color(0xFF2563EB)
+                                            else -> Color(0xFF059669)
                                         },
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold
@@ -819,6 +1173,178 @@ fun PharmacyHomeDashboard(
             }
         }
     }
+
+    if (showChangePasswordDialog) {
+        var currentPasswordInput by remember { mutableStateOf("") }
+        var newPasswordInput by remember { mutableStateOf("") }
+        var confirmPasswordInput by remember { mutableStateOf("") }
+        var isUpdatingPassword by remember { mutableStateOf(false) }
+
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showChangePasswordDialog = false }
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF1E293B) else Color.White),
+                border = BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0))
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(50.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF3B82F6).copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Lock,
+                            contentDescription = null,
+                            tint = Color(0xFF3B82F6),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = "Change Pharmacy Password",
+                        color = if (isDark) Color.White else Color(0xFF0F172A),
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    OutlinedTextField(
+                        value = currentPasswordInput,
+                        onValueChange = { currentPasswordInput = it },
+                        label = { Text("Current Password", color = Color(0xFF94A3B8)) },
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = if (isDark) Color.White else Color(0xFF0F172A),
+                            unfocusedTextColor = if (isDark) Color.White else Color(0xFF0F172A),
+                            focusedBorderColor = Color(0xFF3B82F6),
+                            unfocusedBorderColor = Color(0xFF475569)
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = newPasswordInput,
+                        onValueChange = { newPasswordInput = it },
+                        label = { Text("New Password (min 6 chars)", color = Color(0xFF94A3B8)) },
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = if (isDark) Color.White else Color(0xFF0F172A),
+                            unfocusedTextColor = if (isDark) Color.White else Color(0xFF0F172A),
+                            focusedBorderColor = Color(0xFF3B82F6),
+                            unfocusedBorderColor = Color(0xFF475569)
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = confirmPasswordInput,
+                        onValueChange = { confirmPasswordInput = it },
+                        label = { Text("Confirm New Password", color = Color(0xFF94A3B8)) },
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = if (isDark) Color.White else Color(0xFF0F172A),
+                            unfocusedTextColor = if (isDark) Color.White else Color(0xFF0F172A),
+                            focusedBorderColor = Color(0xFF3B82F6),
+                            unfocusedBorderColor = Color(0xFF475569)
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { showChangePasswordDialog = false },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("Cancel", color = Color(0xFF94A3B8))
+                        }
+
+                        Button(
+                            onClick = {
+                                if (currentPasswordInput.isBlank() || newPasswordInput.isBlank()) {
+                                    Toast.makeText(context, "Fields cannot be blank.", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+                                if (newPasswordInput.length < 6) {
+                                    Toast.makeText(context, "New password must be at least 6 characters.", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+                                if (newPasswordInput != confirmPasswordInput) {
+                                    Toast.makeText(context, "Passwords do not match.", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+                                scope.launch {
+                                    isUpdatingPassword = true
+                                    try {
+                                        val email = activeUser?.email ?: "admin@apollopharmacy.com"
+                                        
+                                        // Update in Supabase if configured
+                                        if (com.example.data.SupabaseManager.isConfigured) {
+                                            val client = com.example.data.SupabaseManager.client
+                                            if (client != null) {
+                                                client.auth.updateUser {
+                                                    password = newPasswordInput
+                                                }
+                                            }
+                                        }
+                                        
+                                        // Always update locally for instant login capability
+                                        viewModel.updatePharmacyPassword(email, newPasswordInput)
+                                        
+                                        Toast.makeText(context, "Password updated successfully!", Toast.LENGTH_SHORT).show()
+                                        showChangePasswordDialog = false
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Failed to update password: ${e.message}", Toast.LENGTH_LONG).show()
+                                    } finally {
+                                        isUpdatingPassword = false
+                                    }
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6))
+                        ) {
+                            if (isUpdatingPassword) {
+                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp))
+                            } else {
+                                Text("Update", color = Color.White)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -858,8 +1384,20 @@ fun DashboardMetricCard(
 @Composable
 fun PharmacyDoctorsScreen(viewModel: MainViewModel) {
     val doctors by viewModel.allDoctors.collectAsState()
+    val activeUser by viewModel.activeUser.collectAsState()
 
     var showAddForm by remember { mutableStateOf(false) }
+    var selectedTab by remember { mutableStateOf("Active") } // "Active" or "Deleted"
+
+    // Dialog state for soft delete & permanent delete
+    var doctorToSoftDelete by remember { mutableStateOf<DoctorEntity?>(null) }
+    var doctorToPermanentDelete by remember { mutableStateOf<DoctorEntity?>(null) }
+    
+    // Status Update state
+    var doctorToUpdateStatus by remember { mutableStateOf<DoctorEntity?>(null) }
+    var selectedStatus by remember { mutableStateOf("Available Today") }
+    var expectedTime by remember { mutableStateOf("") }
+    var delayReasonInput by remember { mutableStateOf("") }
 
     // Inputs inside Form
     var docName by remember { mutableStateOf("") }
@@ -869,6 +1407,16 @@ fun PharmacyDoctorsScreen(viewModel: MainViewModel) {
     var docSlots by remember { mutableStateOf("09:00 AM, 11:30 AM, 03:00 PM, 05:00 PM") }
 
     val primaryGreen = Color(0xFF00A86B)
+
+    // Security: Only access own doctors
+    val myDoctors = if (activeUser?.role == "Pharmacy") {
+        doctors.filter { it.pharmacyId == activeUser?.id }
+    } else {
+        doctors
+    }
+
+    val activeRoster = myDoctors.filter { !it.isSoftDeleted }
+    val deletedRoster = myDoctors.filter { it.isSoftDeleted }
 
     Box(
         modifier = Modifier
@@ -902,59 +1450,459 @@ fun PharmacyDoctorsScreen(viewModel: MainViewModel) {
                 }
             }
 
-            // List of doctors
-            LazyColumn(
+            // Beautiful modern tab bar
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                    .padding(horizontal = 20.dp, vertical = 8.dp)
+                    .background(Color(0xFFF1F5F9), RoundedCornerShape(12.dp))
+                    .padding(4.dp)
             ) {
-                items(doctors) { doctor ->
-                    Card(
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
-                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                        modifier = Modifier.fillMaxWidth()
+                listOf("Active", "Deleted").forEach { tab ->
+                    val isSel = selectedTab == tab
+                    val displayName = if (tab == "Deleted") {
+                        "Deleted Doctors (${deletedRoster.size})"
+                    } else {
+                        "Active Roster (${activeRoster.size})"
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSel) Color.White else Color.Transparent)
+                            .clickable { selectedTab = tab }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(64.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(primaryGreen.copy(alpha = 0.1f)),
-                                contentAlignment = Alignment.Center
+                        Text(
+                            text = displayName,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSel) primaryGreen else Color(0xFF64748B)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            if (selectedTab == "Active") {
+                if (activeRoster.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No active doctors. Click 'Add Doctor' to register one.",
+                            color = Color(0xFF64748B),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                } else {
+                    // List of active doctors
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        items(activeRoster) { doctor ->
+                            Card(
+                                shape = RoundedCornerShape(18.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+                                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Icon(Icons.Rounded.Person, contentDescription = null, tint = primaryGreen, modifier = Modifier.size(32.dp))
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(64.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(primaryGreen.copy(alpha = 0.1f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.Person,
+                                            contentDescription = null,
+                                            tint = primaryGreen,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(16.dp))
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(text = doctor.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color(0xFF0F172A))
+                                        Text(text = doctor.specialization, color = primaryGreen, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(text = "Exp: ${doctor.experience} yrs  •  Fee: ₹${doctor.fee}", fontSize = 11.sp, color = Color(0xFF64748B), modifier = Modifier.padding(top = 2.dp))
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(
+                                                    when (doctor.availabilityStatus) {
+                                                        "Running Late" -> Color(0xFFFEF3C7)
+                                                        "On Holiday" -> Color(0xFFFEF2F2)
+                                                        else -> Color(0xFFECFDF5)
+                                                    }
+                                                )
+                                                .clickable {
+                                                    doctorToUpdateStatus = doctor
+                                                    selectedStatus = doctor.availabilityStatus.ifEmpty { "Available Today" }
+                                                    expectedTime = doctor.expectedStartTime
+                                                    delayReasonInput = doctor.delayReason
+                                                }
+                                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = when (doctor.availabilityStatus) {
+                                                    "Running Late" -> "⏳ Running Late" + (if (doctor.expectedStartTime.isNotEmpty()) " (${doctor.expectedStartTime})" else "")
+                                                    "On Holiday" -> "🌴 On Holiday"
+                                                    else -> "🟢 Available Today"
+                                                },
+                                                color = when (doctor.availabilityStatus) {
+                                                    "Running Late" -> Color(0xFFD97706)
+                                                    "On Holiday" -> Color(0xFFDC2626)
+                                                    else -> Color(0xFF059669)
+                                                },
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Icon(
+                                                imageVector = Icons.Rounded.Edit,
+                                                contentDescription = "Edit Status",
+                                                tint = when (doctor.availabilityStatus) {
+                                                    "Running Late" -> Color(0xFFD97706)
+                                                    "On Holiday" -> Color(0xFFDC2626)
+                                                    else -> Color(0xFF059669)
+                                                },
+                                                modifier = Modifier.size(10.dp)
+                                            )
+                                        }
+                                    }
+
+                                    // Enable Toggle Switch & Delete Action
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = if (doctor.isEnabled) "ACTIVE" else "DISABLED",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (doctor.isEnabled) primaryGreen else Color(0xFF94A3B8)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Switch(
+                                                checked = doctor.isEnabled,
+                                                onCheckedChange = { viewModel.toggleDoctorEnabled(doctor.id, it) },
+                                                colors = SwitchDefaults.colors(checkedThumbColor = primaryGreen, checkedTrackColor = primaryGreen.copy(alpha = 0.3f))
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        IconButton(
+                                            onClick = { doctorToSoftDelete = doctor },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.DeleteOutline,
+                                                contentDescription = "Move to Deleted Doctors",
+                                                tint = Color(0xFFEF4444)
+                                            )
+                                        }
+                                    }
+                                }
                             }
+                        }
+                    }
+                }
+            } else {
+                // Deleted Doctors Tab
+                if (deletedRoster.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Rounded.DeleteOutline,
+                                contentDescription = null,
+                                tint = Color(0xFF94A3B8),
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "No Deleted Doctors",
+                                color = Color(0xFF64748B),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        items(deletedRoster) { doctor ->
+                            Card(
+                                shape = RoundedCornerShape(18.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF1F2)),
+                                border = BorderStroke(1.dp, Color(0xFFFECDD3)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(64.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color(0xFFFDA4AF).copy(alpha = 0.2f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.Person,
+                                            contentDescription = null,
+                                            tint = Color(0xFFE11D48),
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                    }
 
-                            Spacer(modifier = Modifier.width(16.dp))
+                                    Spacer(modifier = Modifier.width(16.dp))
 
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(text = doctor.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color(0xFF0F172A))
-                                Text(text = doctor.specialization, color = primaryGreen, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                                Text(text = "Exp: ${doctor.experience} yrs  •  Fee: ₹${doctor.fee}", fontSize = 11.sp, color = Color(0xFF64748B), modifier = Modifier.padding(top = 2.dp))
-                            }
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(text = doctor.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color(0xFF0F172A))
+                                        Text(text = doctor.specialization, color = Color(0xFFE11D48), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(text = "Exp: ${doctor.experience} yrs  •  Fee: ₹${doctor.fee}", fontSize = 11.sp, color = Color(0xFF64748B), modifier = Modifier.padding(top = 2.dp))
+                                    }
 
-                            // Enable Toggle Switch
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    text = if (doctor.isEnabled) "ACTIVE" else "DISABLED",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (doctor.isEnabled) primaryGreen else Color(0xFF94A3B8)
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Switch(
-                                    checked = doctor.isEnabled,
-                                    onCheckedChange = { viewModel.toggleDoctorEnabled(doctor.id, it) },
-                                    colors = SwitchDefaults.colors(checkedThumbColor = primaryGreen, checkedTrackColor = primaryGreen.copy(alpha = 0.3f))
-                                )
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Button(
+                                            onClick = { viewModel.restoreDoctor(doctor.id) },
+                                            colors = ButtonDefaults.buttonColors(containerColor = primaryGreen),
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                            modifier = Modifier.height(28.dp)
+                                        ) {
+                                            Icon(Icons.Rounded.Restore, contentDescription = null, modifier = Modifier.size(12.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Restore", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        OutlinedButton(
+                                            onClick = { doctorToPermanentDelete = doctor },
+                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF4444)),
+                                            border = BorderStroke(1.dp, Color(0xFFFCA5A5)),
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                            modifier = Modifier.height(28.dp)
+                                        ) {
+                                            Icon(Icons.Rounded.DeleteForever, contentDescription = null, modifier = Modifier.size(12.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Wipe", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
+        }
+
+        // Soft Delete Confirmation Dialog
+        if (doctorToSoftDelete != null) {
+            AlertDialog(
+                onDismissRequest = { doctorToSoftDelete = null },
+                title = { Text("Move to Deleted Doctors?", fontWeight = FontWeight.Bold) },
+                text = { Text("Are you sure you want to delete Dr. ${doctorToSoftDelete?.name}? This will hide them from the patient app and search results, but you can restore them anytime.") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            doctorToSoftDelete?.let { viewModel.softDeleteDoctor(it.id) }
+                            doctorToSoftDelete = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = primaryGreen)
+                    ) {
+                        Text("Move to Deleted")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { doctorToSoftDelete = null }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
+        // Permanent Delete Confirmation Dialog
+        if (doctorToPermanentDelete != null) {
+            AlertDialog(
+                onDismissRequest = { doctorToPermanentDelete = null },
+                title = { Text("Permanently Delete Clinician?", fontWeight = FontWeight.Bold, color = Color(0xFFEF4444)) },
+                text = { Text("Are you sure you want to PERMANENTLY wipe Dr. ${doctorToPermanentDelete?.name}? All schedules, holidays, and reviews will be completely erased. This action is irreversible.") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            doctorToPermanentDelete?.let { viewModel.permanentlyDeleteDoctor(it.id) }
+                            doctorToPermanentDelete = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444))
+                    ) {
+                        Text("Wipe Permanently")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { doctorToPermanentDelete = null }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
+        // Clinician Availability Status Dialog
+        if (doctorToUpdateStatus != null) {
+            AlertDialog(
+                onDismissRequest = { doctorToUpdateStatus = null },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = Color.White,
+                title = {
+                    Text(
+                        text = "Update Status: Dr. ${doctorToUpdateStatus?.name}",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = Color(0xFF0F172A)
+                    )
+                },
+                text = {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(text = "Status Availability Type:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF64748B))
+                        
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            listOf("Available Today", "Running Late", "On Holiday").forEach { stat ->
+                                val isSel = selectedStatus == stat
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isSel) primaryGreen.copy(alpha = 0.15f) else Color(0xFFF1F5F9))
+                                        .border(1.dp, if (isSel) primaryGreen else Color.Transparent, RoundedCornerShape(8.dp))
+                                        .clickable { selectedStatus = stat }
+                                        .padding(vertical = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = stat.replace(" Today", ""),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isSel) primaryGreen else Color(0xFF64748B)
+                                    )
+                                }
+                            }
+                        }
+                        
+                        if (selectedStatus == "Running Late") {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(text = "Expected Start Time (e.g., 10:30 AM)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF64748B))
+                                OutlinedTextField(
+                                    value = expectedTime,
+                                    onValueChange = { expectedTime = it },
+                                    placeholder = { Text("e.g. 10:30 AM") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                            }
+                            
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(text = "Delay Reason", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF64748B))
+                                
+                                val reasons = listOf("Emergency OT", "Hospital Duty", "Medical Emergency", "Traffic Delay", "Conference")
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    reasons.forEach { r ->
+                                        val isRSelected = delayReasonInput == r
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(if (isRSelected) primaryGreen else Color(0xFFF1F5F9))
+                                                .clickable { delayReasonInput = r }
+                                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                        ) {
+                                            Text(
+                                                text = r,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isRSelected) Color.White else Color(0xFF475569)
+                                            )
+                                        }
+                                    }
+                                }
+                                
+                                Spacer(modifier = Modifier.height(4.dp))
+                                
+                                OutlinedTextField(
+                                    value = delayReasonInput,
+                                    onValueChange = { delayReasonInput = it },
+                                    placeholder = { Text("Or type delay reason...") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val doc = doctorToUpdateStatus
+                            if (doc != null) {
+                                viewModel.updateDoctorAvailability(
+                                    doctorId = doc.id,
+                                    status = selectedStatus,
+                                    expectedStartTime = if (selectedStatus == "Running Late") expectedTime else "",
+                                    delayReason = if (selectedStatus == "Running Late") delayReasonInput else ""
+                                )
+                            }
+                            doctorToUpdateStatus = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = primaryGreen),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Save Status", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { doctorToUpdateStatus = null }) {
+                        Text("Cancel", color = Color(0xFF64748B))
+                    }
+                }
+            )
         }
 
         // Simple Form Slide over / overlay Card
@@ -1057,6 +2005,13 @@ fun PharmacyDoctorsScreen(viewModel: MainViewModel) {
 @Composable
 fun PharmacyScheduleScreen(viewModel: MainViewModel) {
     val doctors by viewModel.allDoctors.collectAsState()
+    val activeUser by viewModel.activeUser.collectAsState()
+
+    val myDoctors = if (activeUser?.role == "Pharmacy") {
+        doctors.filter { it.pharmacyId == activeUser?.id && !it.isSoftDeleted }
+    } else {
+        doctors.filter { !it.isSoftDeleted }
+    }
 
     var selectedDoctor by remember { mutableStateOf<DoctorEntity?>(null) }
     var selectedDate by remember { mutableStateOf("2026-06-21") } // Simulating nice default
@@ -1067,9 +2022,9 @@ fun PharmacyScheduleScreen(viewModel: MainViewModel) {
 
     val primaryGreen = Color(0xFF00A86B)
 
-    LaunchedEffect(doctors) {
-        if (doctors.isNotEmpty() && selectedDoctor == null) {
-            selectedDoctor = doctors.first()
+    LaunchedEffect(myDoctors) {
+        if (myDoctors.isNotEmpty() && (selectedDoctor == null || !myDoctors.any { it.id == selectedDoctor?.id })) {
+            selectedDoctor = myDoctors.first()
         }
     }
 
@@ -1116,7 +2071,7 @@ fun PharmacyScheduleScreen(viewModel: MainViewModel) {
                 .padding(vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            doctors.forEach { doc ->
+            myDoctors.forEach { doc ->
                 val isSel = selectedDoctor?.id == doc.id
                 Box(
                     modifier = Modifier
@@ -1255,10 +2210,22 @@ fun PharmacyScheduleScreen(viewModel: MainViewModel) {
 fun PharmacyAppointmentsListScreen(viewModel: MainViewModel) {
     val bookings by viewModel.allBookings.collectAsState()
     val doctors by viewModel.allDoctors.collectAsState()
+    val activeUser by viewModel.activeUser.collectAsState()
+
+    val myDoctors = if (activeUser?.role == "Pharmacy") {
+        doctors.filter { it.pharmacyId == activeUser?.id }
+    } else {
+        doctors
+    }
+    val myBookings = if (activeUser?.role == "Pharmacy") {
+        bookings.filter { booking -> myDoctors.any { it.id == booking.doctorId } }
+    } else {
+        bookings
+    }
 
     var activeTab by remember { mutableStateOf("All") } // "All", "Confirmed", "Cancelled"
 
-    val filteredBookings = bookings.filter {
+    val filteredBookings = myBookings.filter {
         when (activeTab) {
             "Confirmed" -> it.status == "Upcoming" || it.status == "Completed"
             "Cancelled" -> it.status == "Cancelled"
@@ -1353,6 +2320,34 @@ fun PharmacyAppointmentsListScreen(viewModel: MainViewModel) {
                                     ) {
                                         Text(booking.paymentStatus, color = if (booking.paymentStatus == "Paid") Color(0xFF047857) else Color(0xFFB45309), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(
+                                                when (booking.status) {
+                                                    "Upcoming", "Confirmed" -> Color(0xFFECFDF5)
+                                                    "Waiting" -> Color(0xFFFEF3C7)
+                                                    "Cancelled" -> Color(0xFFFEF2F2)
+                                                    "Completed" -> Color(0xFFEFF6FF)
+                                                    else -> Color(0xFFECFDF5)
+                                                }
+                                            )
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = booking.status,
+                                            color = when (booking.status) {
+                                                "Upcoming", "Confirmed" -> Color(0xFF059669)
+                                                "Waiting" -> Color(0xFFD97706)
+                                                "Cancelled" -> Color(0xFFDC2626)
+                                                "Completed" -> Color(0xFF2563EB)
+                                                else -> Color(0xFF059669)
+                                            },
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
 
                                 Text(text = booking.dateStr, fontSize = 12.sp, color = Color(0xFF64748B))
@@ -1404,6 +2399,55 @@ fun PharmacyAppointmentsListScreen(viewModel: MainViewModel) {
 @Composable
 fun PharmacySubscriptionScreen(viewModel: MainViewModel) {
     val subState by viewModel.currentPharmacySubscription.collectAsState()
+    val activeUser by viewModel.activeUser.collectAsState()
+    val pharmacies by viewModel.allPharmacies.collectAsState()
+    val pricingSettings by viewModel.pricingSettings.collectAsState()
+
+    val monthly = pricingSettings?.monthlySubscriptionFee ?: 10.0
+    val quarterly = pricingSettings?.quarterlySubscriptionFee ?: 30.0
+    val yearly = pricingSettings?.yearlySubscriptionFee ?: 100.0
+
+    val myPharmacy = pharmacies.find { it.id == activeUser?.id } ?: pharmacies.firstOrNull()
+
+    val planName = if (myPharmacy?.trialStarted == true) "30-Day Free Trial" else "Pro Standard Plan"
+    val todayStr = remember(pharmacies) { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date()) }
+    val expiryStr = myPharmacy?.subscriptionExpiry ?: ""
+    val daysRemaining = if (expiryStr.isNotEmpty()) viewModel.calculateDaysBetween(todayStr, expiryStr) else 30L
+
+    val planAmount = when {
+        myPharmacy?.subscriptionPlan?.contains("Quarterly", ignoreCase = true) == true -> quarterly
+        myPharmacy?.subscriptionPlan?.contains("Yearly", ignoreCase = true) == true -> yearly
+        else -> monthly
+    }
+    val planLabel = when {
+        myPharmacy?.subscriptionPlan?.contains("Quarterly", ignoreCase = true) == true -> " / Quarter"
+        myPharmacy?.subscriptionPlan?.contains("Yearly", ignoreCase = true) == true -> " / Year"
+        else -> " / Month"
+    }
+
+    val trialStatus = when {
+        myPharmacy == null -> "Not Started"
+        !myPharmacy.trialStarted -> "Pending Activation"
+        daysRemaining >= 0 -> "Active"
+        daysRemaining < 0 && daysRemaining > -5 -> "Grace Period"
+        else -> "Suspended"
+    }
+
+    val progress = if (myPharmacy?.trialStarted == true) {
+        if (daysRemaining >= 0) {
+            (30f - daysRemaining.toFloat()) / 30f
+        } else {
+            1.0f
+        }
+    } else {
+        0.0f
+    }.coerceIn(0.0f, 1.0f)
+
+    val graceDaysLeft = if (daysRemaining < 0) {
+        (5 + daysRemaining).coerceAtLeast(0)
+    } else {
+        0
+    }
 
     var autoRenewal by remember { mutableStateOf(subState?.autoRenewal ?: true) }
 
@@ -1490,7 +2534,7 @@ fun PharmacySubscriptionScreen(viewModel: MainViewModel) {
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        text = "₹299 / Month",
+                        text = "₹${planAmount.toInt()}$planLabel",
                         fontSize = 32.sp,
                         fontWeight = FontWeight.Black,
                         color = Color.White
@@ -1515,6 +2559,153 @@ fun PharmacySubscriptionScreen(viewModel: MainViewModel) {
                             Text("Billed Platform", fontSize = 10.sp, color = Color.White.copy(alpha = 0.5f))
                             Text(text = "Razorpay Integration", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
                         }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Subscription / Trial Status Dashboard Card
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text(
+                    text = "TRIAL / SUBSCRIPTION DASHBOARD",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF64748B),
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                // Current Plan Row
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Current Plan", fontSize = 13.sp, color = Color(0xFF475569))
+                    Text(
+                        text = planName,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0F172A)
+                    )
+                }
+
+                // Trial Status Row
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Trial Status", fontSize = 13.sp, color = Color(0xFF475569))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                when (trialStatus) {
+                                    "Active" -> Color(0xFFDCFCE7)
+                                    "Grace Period" -> Color(0xFFFEF3C7)
+                                    "Suspended" -> Color(0xFFFEE2E2)
+                                    else -> Color(0xFFF1F5F9)
+                                }
+                            )
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = trialStatus.uppercase(),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = when (trialStatus) {
+                                "Active" -> Color(0xFF15803D)
+                                "Grace Period" -> Color(0xFFB45309)
+                                "Suspended" -> Color(0xFFB91C1C)
+                                else -> Color(0xFF475569)
+                            }
+                        )
+                    }
+                }
+
+                // Days Remaining Row
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Days Remaining", fontSize = 13.sp, color = Color(0xFF475569))
+                    Text(
+                        text = if (daysRemaining >= 0) "$daysRemaining Days" else "0 Days",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (daysRemaining <= 3) Color(0xFFEF4444) else Color(0xFF0F172A)
+                    )
+                }
+
+                // Expiry Date Row
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Expiry Date", fontSize = 13.sp, color = Color(0xFF475569))
+                    Text(
+                        text = if (expiryStr.isEmpty()) "Not Activated" else expiryStr,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0F172A)
+                    )
+                }
+
+                if (myPharmacy?.trialStarted == true && daysRemaining >= 0) {
+                    // Progress Bar
+                    Text(
+                        text = "Trial Progress (${(progress * 100).toInt()}% Elapsed)",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF64748B),
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                    LinearProgressIndicator(
+                        progress = progress,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                        color = Color(0xFF6C5DD3),
+                        trackColor = Color(0xFFE2E8F0)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                if (trialStatus == "Grace Period") {
+                    // Grace Period Remaining
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFFFEF2F2))
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Grace Period Remaining",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF991B1B)
+                        )
+                        Text(
+                            text = "$graceDaysLeft Days",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color(0xFFEF4444)
+                        )
                     }
                 }
             }

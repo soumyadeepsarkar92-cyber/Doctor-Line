@@ -41,7 +41,7 @@ interface DoctorLineDao {
     @Query("SELECT * FROM doctors")
     fun getAllDoctorsFlow(): Flow<List<DoctorEntity>>
 
-    @Query("SELECT * FROM doctors WHERE isEnabled = 1")
+    @Query("SELECT * FROM doctors WHERE isEnabled = 1 AND isSoftDeleted = 0")
     fun getActiveDoctorsFlow(): Flow<List<DoctorEntity>>
 
     @Query("SELECT * FROM doctors WHERE id = :id")
@@ -55,6 +55,24 @@ interface DoctorLineDao {
 
     @Update
     suspend fun updateDoctor(doctor: DoctorEntity)
+
+    @Query("DELETE FROM doctors WHERE id = :id")
+    suspend fun deleteDoctorById(id: String)
+
+    @Query("DELETE FROM schedules WHERE doctorId = :doctorId")
+    suspend fun deleteSchedulesByDoctorId(doctorId: String)
+
+    @Query("DELETE FROM schedules WHERE doctorId = :doctorId AND dateStr >= :todayDate")
+    suspend fun deleteFutureSchedules(doctorId: String, todayDate: String)
+
+    @Query("DELETE FROM bookings WHERE doctorId = :doctorId AND dateStr >= :todayDate AND status = 'Upcoming'")
+    suspend fun deleteFutureBookings(doctorId: String, todayDate: String)
+
+    @Query("SELECT * FROM bookings WHERE doctorId = :doctorId")
+    suspend fun getBookingsByDoctorList(doctorId: String): List<BookingEntity>
+
+    @Query("DELETE FROM reviews WHERE doctorId = :doctorId")
+    suspend fun deleteReviewsByDoctorId(doctorId: String)
 
     // Schedules
     @Query("SELECT * FROM schedules WHERE doctorId = :doctorId ORDER BY dateStr ASC")
@@ -150,4 +168,33 @@ interface DoctorLineDao {
 
     @Update
     suspend fun updatePharmacyRequest(request: PharmacyRequestEntity)
+
+    // Favourite Doctors
+    @Query("SELECT * FROM favourite_doctors")
+    fun getAllFavouritesFlow(): Flow<List<FavouriteDoctorEntity>>
+
+    @Query("SELECT * FROM favourite_doctors WHERE patientId = :patientId")
+    fun getFavouritesForPatientFlow(patientId: String): Flow<List<FavouriteDoctorEntity>>
+
+    @Query("SELECT * FROM favourite_doctors WHERE patientId = :patientId AND doctorId = :doctorId LIMIT 1")
+    suspend fun getFavourite(patientId: String, doctorId: String): FavouriteDoctorEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertFavourite(favourite: FavouriteDoctorEntity)
+
+    @Query("DELETE FROM favourite_doctors WHERE patientId = :patientId AND doctorId = :doctorId")
+    suspend fun deleteFavourite(patientId: String, doctorId: String)
+
+    @Query("DELETE FROM favourite_doctors WHERE patientId = :patientId")
+    suspend fun deleteFavouritesForPatient(patientId: String)
+
+    // Pricing Settings
+    @Query("SELECT * FROM pricing_settings WHERE id = 'default_pricing' LIMIT 1")
+    fun getPricingSettingsFlow(): Flow<PricingSettingsEntity?>
+
+    @Query("SELECT * FROM pricing_settings WHERE id = 'default_pricing' LIMIT 1")
+    suspend fun getPricingSettings(): PricingSettingsEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPricingSettings(settings: PricingSettingsEntity)
 }

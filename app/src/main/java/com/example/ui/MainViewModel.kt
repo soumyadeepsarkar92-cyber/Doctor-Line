@@ -58,6 +58,9 @@ class MainViewModel(application: Application, private val repository: DoctorLine
     val allPharmacyRequests: StateFlow<List<PharmacyRequestEntity>> = repository.allPharmacyRequests
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val pricingSettings: StateFlow<PricingSettingsEntity?> = repository.pricingSettings
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PricingSettingsEntity())
+
     // Selection States for patient booking flows
     private val _selectedDoctor = MutableStateFlow<DoctorEntity?>(null)
     val selectedDoctor: StateFlow<DoctorEntity?> = _selectedDoctor.asStateFlow()
@@ -83,6 +86,9 @@ class MainViewModel(application: Application, private val repository: DoctorLine
     private val _patientBookings = MutableStateFlow<List<BookingEntity>>(emptyList())
     val patientBookings: StateFlow<List<BookingEntity>> = _patientBookings.asStateFlow()
 
+    private val _patientFavourites = MutableStateFlow<List<FavouriteDoctorEntity>>(emptyList())
+    val patientFavourites: StateFlow<List<FavouriteDoctorEntity>> = _patientFavourites.asStateFlow()
+
     init {
         viewModelScope.launch {
             try {
@@ -94,13 +100,71 @@ class MainViewModel(application: Application, private val repository: DoctorLine
         viewModelScope.launch {
             // Simulated daily subscription cron check (at launch / updates)
             try {
-                val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+                if (com.example.data.SupabaseManager.isConfigured) {
+                    repository.fetchAndSyncPharmacies()
+                }
                 repository.allPharmacies.collect { pharmaciesList ->
+                    val notificationsList = repository.allNotifications.firstOrNull() ?: emptyList()
+                    val todayStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+                    
                     pharmaciesList.forEach { phar ->
-                        if (phar.subscriptionExpiry < today && phar.status != "Suspended") {
-                            val updated = phar.copy(status = "Suspended")
-                            repository.editPharmacy(updated)
-                            repository.logAction("Subscription Expired", "SaaS subscription validity expired for ${phar.name} (Expiry: ${phar.subscriptionExpiry}). Account has been SUSPENDED.")
+                        if (!phar.trialStarted) return@forEach
+                        
+                        val daysRemaining = calculateDaysBetween(todayStr, phar.subscriptionExpiry)
+                        
+                        // 1. Notify 7 days before expiry
+                        if (daysRemaining == 7L) {
+                            val title = "Subscription Alert: 7 Days Remaining (${phar.name})"
+                            if (notificationsList.none { it.title == title }) {
+                                sendSubscriptionAlert(title, "Your subscription/trial for ${phar.name} will expire in 7 days on ${phar.subscriptionExpiry}.")
+                            }
+                        }
+                        
+                        // 2. Notify 3 days before expiry
+                        if (daysRemaining == 3L) {
+                            val title = "Subscription Alert: 3 Days Remaining (${phar.name})"
+                            if (notificationsList.none { it.title == title }) {
+                                sendSubscriptionAlert(title, "Your subscription/trial for ${phar.name} will expire in 3 days on ${phar.subscriptionExpiry}.")
+                            }
+                        }
+                        
+                        // 3. Notify 1 day before expiry
+                        if (daysRemaining == 1L) {
+                            val title = "Subscription Alert: 1 Day Remaining (${phar.name})"
+                            if (notificationsList.none { it.title == title }) {
+                                sendSubscriptionAlert(title, "Your subscription/trial for ${phar.name} will expire tomorrow on ${phar.subscriptionExpiry}.")
+                            }
+                        }
+                        
+                        // 4. On expiry (0 days remaining)
+                        if (daysRemaining == 0L) {
+                            val title = "Subscription Expired (${phar.name})"
+                            if (notificationsList.none { it.title == title }) {
+                                sendSubscriptionAlert(title, "Your subscription/trial for ${phar.name} has expired today (${phar.subscriptionExpiry}). 5-day Grace Period has started.")
+                            }
+                        }
+                        
+                        // 5. On grace period start (daysRemaining < 0 and within 5 days)
+                        if (daysRemaining < 0 && daysRemaining > -5) {
+                            val title = "Grace Period Active (${phar.name})"
+                            val graceDaysLeft = 5 + daysRemaining
+                            if (notificationsList.none { it.title == "$title - Day $graceDaysLeft" }) {
+                                sendSubscriptionAlert("$title - Day $graceDaysLeft", "Your subscription/trial has expired. You are now in a 5-day grace period. $graceDaysLeft days remaining before account suspension.")
+                            }
+                        }
+                        
+                        // 6. On suspension (after 5 days)
+                        if (daysRemaining <= -5L && phar.status != "Suspended") {
+                            val title = "Account Suspended (${phar.name})"
+                            if (notificationsList.none { it.title == title }) {
+                                sendSubscriptionAlert(title, "Your grace period has ended. Your pharmacy account has been suspended.")
+                            }
+                            // Suspend pharmacy!
+                            viewModelScope.launch {
+                                val updated = phar.copy(status = "Suspended")
+                                repository.editPharmacy(updated)
+                                repository.logAction("Subscription Suspended", "SaaS subscription grace period expired for ${phar.name}. Account has been SUSPENDED.")
+                            }
                         }
                     }
                 }
@@ -111,7 +175,45 @@ class MainViewModel(application: Application, private val repository: DoctorLine
         viewModelScope.launch {
             activeUser.collect { user ->
                 if (user != null && user.role == "Pharmacy") {
-                    repository.getSubscriptionForPharmacy("phar_apollo").collect { sub ->
+                    try {
+                        if (com.example.data.SupabaseManager.isConfigured) {
+                            repository.fetchAndSyncPharmacies()
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("MainViewModel", "Fetch pharmacies error on activeUser collect: ${e.message}")
+                    }
+
+                    val pharList = repository.allPharmacies.firstOrNull() ?: emptyList()
+                    val phar = pharList.find { it.id == user.id } ?: pharList.firstOrNull()
+                    if (phar != null) {
+                        if (!phar.trialStarted) {
+                            val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+                            val calendar = java.util.Calendar.getInstance()
+                            calendar.add(java.util.Calendar.DAY_OF_YEAR, 30)
+                            val expiryDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(calendar.time)
+                            
+                            val updatedPharmacy = phar.copy(
+                                trialStarted = true,
+                                trialStartDate = today,
+                                trialEndDate = expiryDate,
+                                subscriptionStart = today,
+                                subscriptionExpiry = expiryDate,
+                                status = "Active"
+                            )
+                            repository.editPharmacy(updatedPharmacy)
+                            repository.logAction("Trial Started", "Pharmacy ${phar.name} logged in for the first time. 30-day Free Trial started. Expiry: $expiryDate.")
+                            
+                            repository.addNotification(
+                                NotificationEntity(
+                                    title = "Trial Started (${phar.name})",
+                                    message = "Your 30-day free trial has successfully started! It will expire on $expiryDate.",
+                                    timestamp = System.currentTimeMillis()
+                                )
+                            )
+                        }
+                    }
+
+                    repository.getSubscriptionForPharmacy(user.id).collect { sub ->
                         _currentPharmacySubscription.value = sub
                     }
                 } else {
@@ -129,6 +231,61 @@ class MainViewModel(application: Application, private val repository: DoctorLine
                     _patientBookings.value = emptyList()
                 }
             }
+        }
+        viewModelScope.launch {
+            activeUser.collect { user ->
+                if (user != null && user.role == "Patient") {
+                    launch {
+                        try {
+                            if (com.example.data.SupabaseManager.isConfigured) {
+                                repository.fetchAndSyncFavourites(user.id)
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("MainViewModel", "Initial favourites sync error: ${e.message}")
+                        }
+                    }
+                    repository.getFavouritesForPatient(user.id).collect { favs ->
+                        _patientFavourites.value = favs
+                    }
+                } else {
+                    _patientFavourites.value = emptyList()
+                }
+            }
+        }
+        // Realtime Polling Synchronization Loop for Live updates
+        viewModelScope.launch {
+            while (kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]?.isActive == true) {
+                kotlinx.coroutines.delay(4000)
+                try {
+                    if (com.example.data.SupabaseManager.isConfigured) {
+                        repository.fetchAndSyncDoctors()
+                        activeUser.value?.let { user ->
+                            if (user.role == "Patient") {
+                                repository.fetchAndSyncFavourites(user.id)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("MainViewModel", "Realtime polling error: ${e.message}")
+                }
+            }
+        }
+    }
+
+    fun toggleFavourite(doctorId: String) {
+        val user = activeUser.value ?: return
+        viewModelScope.launch {
+            repository.toggleFavouriteDoctor(user.id, doctorId)
+        }
+    }
+
+    fun updateDoctorAvailability(doctorId: String, status: String, expectedStartTime: String, delayReason: String) {
+        viewModelScope.launch {
+            if (isCurrentPharmacyExpired()) {
+                repository.logAction("Action Blocked", "Tried to update doctor availability but subscription/trial has expired.")
+                return@launch
+            }
+            repository.updateDoctorAvailability(doctorId, status, expectedStartTime, delayReason)
         }
     }
 
@@ -164,12 +321,26 @@ class MainViewModel(application: Application, private val repository: DoctorLine
         age: Int,
         gender: String,
         paymentMode: String,
-        onSuccess: () -> Unit
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit = {}
     ) {
         val doctor = _selectedDoctor.value ?: return
         val slot = _selectedTimeSlot.value ?: return
 
         viewModelScope.launch {
+            val pharmaciesList = repository.allPharmacies.firstOrNull() ?: emptyList()
+            val phar = pharmaciesList.find { it.id == doctor.pharmacyId }
+            if (phar != null && phar.trialStarted) {
+                val todayStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+                val daysRemaining = calculateDaysBetween(todayStr, phar.subscriptionExpiry)
+                if (daysRemaining < 0) {
+                    val errorMsg = if (daysRemaining <= -5) "This pharmacy is suspended due to subscription expiry." else "This pharmacy's trial/subscription has expired. Bookings are disabled."
+                    repository.logAction("Booking Blocked", "Patient tried to book with ${doctor.name} under ${phar.name}, but subscription/trial has expired.")
+                    onError(errorMsg)
+                    return@launch
+                }
+            }
+
             val dateStr = _selectedDate.value
             val booking = repository.createBooking(
                 patientName = patientName,
@@ -264,15 +435,31 @@ class MainViewModel(application: Application, private val repository: DoctorLine
     }
 
     // PHARMACY SCHEDULE MANAGEMENT ACTIONS
+    suspend fun isCurrentPharmacyExpired(): Boolean {
+        val user = activeUser.value ?: return false
+        if (user.role != "Pharmacy") return false
+        val pharList = repository.allPharmacies.firstOrNull() ?: emptyList()
+        val phar = pharList.find { it.id == user.id } ?: pharList.firstOrNull() ?: return false
+        if (!phar.trialStarted) return false
+        val todayStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+        val daysRemaining = calculateDaysBetween(todayStr, phar.subscriptionExpiry)
+        return daysRemaining < 0
+    }
+
     fun addDoctor(name: String, specialization: String, experience: Int, fee: Double, slots: List<String>) {
         viewModelScope.launch {
+            if (isCurrentPharmacyExpired()) {
+                repository.logAction("Action Blocked", "Tried to add doctor but trial/subscription has expired.")
+                return@launch
+            }
+            val pharmacyId = activeUser.value?.id ?: ""
             val doctor = DoctorEntity(
                 name = name,
                 specialization = specialization,
                 experience = experience,
                 fee = fee,
                 rating = 4.5,
-                pharmacyId = "phar_apollo", // standard
+                pharmacyId = pharmacyId,
                 bannerName = "doctor_male_1",
                 slotsJson = slots.joinToString(", ")
             )
@@ -282,12 +469,50 @@ class MainViewModel(application: Application, private val repository: DoctorLine
 
     fun toggleDoctorEnabled(doctorId: String, isEnabled: Boolean) {
         viewModelScope.launch {
+            if (isCurrentPharmacyExpired()) {
+                repository.logAction("Action Blocked", "Tried to toggle doctor but trial/subscription has expired.")
+                return@launch
+            }
             repository.toggleDoctorEnabled(doctorId, isEnabled)
+        }
+    }
+
+    fun softDeleteDoctor(doctorId: String) {
+        viewModelScope.launch {
+            if (isCurrentPharmacyExpired()) {
+                repository.logAction("Action Blocked", "Tried to soft-delete doctor but trial/subscription has expired.")
+                return@launch
+            }
+            repository.softDeleteDoctor(doctorId)
+        }
+    }
+
+    fun restoreDoctor(doctorId: String) {
+        viewModelScope.launch {
+            if (isCurrentPharmacyExpired()) {
+                repository.logAction("Action Blocked", "Tried to restore doctor but trial/subscription has expired.")
+                return@launch
+            }
+            repository.restoreDoctor(doctorId)
+        }
+    }
+
+    fun permanentlyDeleteDoctor(doctorId: String) {
+        viewModelScope.launch {
+            if (isCurrentPharmacyExpired()) {
+                repository.logAction("Action Blocked", "Tried to permanently-delete doctor but trial/subscription has expired.")
+                return@launch
+            }
+            repository.permanentlyDeleteDoctor(doctorId)
         }
     }
 
     fun saveSchedule(doctorId: String, date: String, fromTime: String, toTime: String, maxPatients: Int, openBooking: Boolean) {
         viewModelScope.launch {
+            if (isCurrentPharmacyExpired()) {
+                repository.logAction("Action Blocked", "Tried to save shift schedule but trial/subscription has expired.")
+                return@launch
+            }
             val schedule = ScheduleEntity(
                 doctorId = doctorId,
                 dateStr = date,
@@ -302,12 +527,20 @@ class MainViewModel(application: Application, private val repository: DoctorLine
 
     fun markHoliday(scheduleId: String, isHoliday: Boolean) {
         viewModelScope.launch {
+            if (isCurrentPharmacyExpired()) {
+                repository.logAction("Action Blocked", "Tried to mark holiday but trial/subscription has expired.")
+                return@launch
+            }
             repository.markHoliday(scheduleId, isHoliday)
         }
     }
 
     fun updateBookingStatus(bookingId: String, status: String) {
         viewModelScope.launch {
+            if (isCurrentPharmacyExpired()) {
+                repository.logAction("Action Blocked", "Tried to update booking status but trial/subscription has expired.")
+                return@launch
+            }
             repository.updateBookingStatus(bookingId, status)
         }
     }
@@ -353,6 +586,12 @@ class MainViewModel(application: Application, private val repository: DoctorLine
         return repository.getPharmacyRequestByEmail(email)
     }
 
+    fun updatePharmacyPassword(email: String, passwordHash: String) {
+        viewModelScope.launch {
+            repository.updatePharmacyPassword(email, passwordHash)
+        }
+    }
+
     fun submitPharmacyRequest(
         pharmacyName: String,
         ownerName: String,
@@ -363,6 +602,10 @@ class MainViewModel(application: Application, private val repository: DoctorLine
         address: String,
         licenseImage: String,
         pharmacyPhoto: String?,
+        paymentId: String,
+        paymentStatus: String,
+        paymentAmount: Double,
+        paymentDate: Long,
         onComplete: (Boolean, String) -> Unit
     ) {
         viewModelScope.launch {
@@ -407,11 +650,25 @@ class MainViewModel(application: Application, private val repository: DoctorLine
                     address = address,
                     licenseImage = licenseImage,
                     pharmacyPhoto = pharmacyPhoto,
-                    status = "pending"
+                    status = "pending_verification",
+                    paymentId = paymentId,
+                    paymentStatus = paymentStatus,
+                    paymentAmount = paymentAmount,
+                    paymentDate = paymentDate
                 )
 
                 repository.addPharmacyRequest(request)
-                onComplete(true, "Your registration request has been submitted successfully.\n\nPlease contact DoctorLine Admin and complete payment.\n\nYour account will be activated after approval.")
+
+                // Notify Master Admin
+                repository.addNotification(
+                    NotificationEntity(
+                        title = "New Pharmacy Registration",
+                        message = "Pharmacy '${pharmacyName}' has submitted a registration request with payment ID: $paymentId.",
+                        timestamp = System.currentTimeMillis()
+                    )
+                )
+
+                onComplete(true, "Your registration request has been submitted successfully.\n\nRegistration fee ₹${paymentAmount.toInt()} was successfully processed (ID: $paymentId).\n\nYour request is pending verification by Master Admin.")
             } catch (e: Exception) {
                 onComplete(false, "Error submitting request: ${e.message}")
             }
@@ -427,6 +684,53 @@ class MainViewModel(application: Application, private val repository: DoctorLine
     fun rejectPharmacyRequest(requestId: String) {
         viewModelScope.launch {
             repository.rejectPharmacyRequest(requestId)
+        }
+    }
+
+    fun requestCorrectionPharmacyRequest(requestId: String) {
+        viewModelScope.launch {
+            repository.requestCorrectionPharmacyRequest(requestId)
+        }
+    }
+
+    fun calculateDaysBetween(startDateStr: String, endDateStr: String): Long {
+        return try {
+            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            val start = sdf.parse(startDateStr)
+            val end = sdf.parse(endDateStr)
+            if (start != null && end != null) {
+                val diff = end.time - start.time
+                diff / (1000L * 60 * 60 * 24)
+            } else {
+                0L
+            }
+        } catch (e: Exception) {
+            0L
+        }
+    }
+
+    fun sendSubscriptionAlert(title: String, message: String) {
+        viewModelScope.launch {
+            repository.addNotification(
+                NotificationEntity(
+                    title = title,
+                    message = message,
+                    timestamp = System.currentTimeMillis()
+                )
+            )
+        }
+    }
+
+    fun savePricingSettings(registrationFee: Double, monthlyFee: Double, quarterlyFee: Double, yearlyFee: Double) {
+        viewModelScope.launch {
+            val current = repository.getPricingSettings() ?: PricingSettingsEntity()
+            val updated = current.copy(
+                registrationFee = registrationFee,
+                monthlySubscriptionFee = monthlyFee,
+                quarterlySubscriptionFee = quarterlyFee,
+                yearlySubscriptionFee = yearlyFee
+            )
+            repository.savePricingSettings(updated)
         }
     }
 

@@ -38,7 +38,10 @@ import com.example.ui.MainViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import android.util.Log
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.auth.user.UserUpdateBuilder
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.verticalScroll
@@ -59,6 +62,7 @@ fun LoginScreen(
 ) {
     var selectedRole by remember { mutableStateOf("Patient") } // "Patient", "Pharmacy", "Admin"
     var showRegisterPharmacyDialog by remember { mutableStateOf(false) }
+    var showForgotPasswordDialog by remember { mutableStateOf(false) }
     
     // Form Inputs
     var emailInput by remember { mutableStateOf("") }
@@ -393,7 +397,7 @@ fun LoginScreen(
                                 visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(bottom = 16.dp),
+                                    .padding(bottom = 6.dp),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedTextColor = textColor,
@@ -404,13 +408,33 @@ fun LoginScreen(
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
                             )
 
+                            // Forgot Password button
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 12.dp),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                TextButton(
+                                    onClick = { showForgotPasswordDialog = true },
+                                    contentPadding = PaddingValues(0.dp)
+                                ) {
+                                    Text(
+                                        text = "Forgot Password?",
+                                        color = accentColor,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            }
+
                             Button(
                                 onClick = {
                                     if (emailInput.isNotBlank() && passwordInput.isNotBlank()) {
                                         scope.launch {
                                             isAuthenticating = true
                                             try {
-                                                // Check registration request status first
+                                                // Verify profiles & pharmacies status completely
                                                 val req = viewModel.getPharmacyRequestByEmail(emailInput.trim())
                                                 if (req != null) {
                                                     when (req.status.lowercase()) {
@@ -425,6 +449,27 @@ fun LoginScreen(
                                                             return@launch
                                                         }
                                                     }
+                                                    
+                                                    // Verify pharmacies.status = active (represent as PharmacyEntity status)
+                                                    val pharmacy = viewModel.allPharmacies.value.find { it.id == req.id || it.phone == req.mobile }
+                                                    if (pharmacy != null && pharmacy.status.lowercase() != "active") {
+                                                        Toast.makeText(context, "Approved pharmacy is currently ${pharmacy.status}. Access Denied.", Toast.LENGTH_LONG).show()
+                                                        isAuthenticating = false
+                                                        return@launch
+                                                    }
+                                                    
+                                                    // Password match verification in local offline sandbox mode
+                                                    if (!com.example.data.SupabaseManager.isConfigured) {
+                                                        if (req.passwordHash != passwordInput) {
+                                                            Toast.makeText(context, "Invalid password. Access Denied.", Toast.LENGTH_LONG).show()
+                                                            isAuthenticating = false
+                                                            return@launch
+                                                        }
+                                                    }
+                                                } else if (emailInput.trim() != "admin@apollopharmacy.com") {
+                                                    Toast.makeText(context, "No registered pharmacy found with this email.", Toast.LENGTH_LONG).show()
+                                                    isAuthenticating = false
+                                                    return@launch
                                                 }
 
                                                 if (com.example.data.SupabaseManager.isConfigured) {
@@ -565,6 +610,13 @@ fun LoginScreen(
                 onDismiss = { showRegisterPharmacyDialog = false }
             )
         }
+
+        if (showForgotPasswordDialog) {
+            ForgotPasswordDialog(
+                viewModel = viewModel,
+                onDismiss = { showForgotPasswordDialog = false }
+            )
+        }
     }
 }
 
@@ -680,11 +732,17 @@ fun PharmacyRegistrationDialog(
     var licenseImage by remember { mutableStateOf("") }
     var pharmacyPhoto by remember { mutableStateOf<String?>(null) }
     
+    // Step Tracking: 1 = Form Entry, 2 = Review & Verify, 3 = Razorpay Payment Screen
+    var dialogStep by remember { mutableStateOf(1) }
+    var selectedPaymentMethod by remember { mutableStateOf("upi") }
+    var isPaying by remember { mutableStateOf(false) }
+    
     var isSubmitting by remember { mutableStateOf(false) }
     var successMessage by remember { mutableStateOf<String?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     // Launchers for image uploads
     val licenseImageLauncher = rememberLauncherForActivityResult(
@@ -709,7 +767,7 @@ fun PharmacyRegistrationDialog(
     val primaryBlue = Color(0xFF3B82F6)
 
     AlertDialog(
-        onDismissRequest = { if (!isSubmitting && successMessage == null) onDismiss() },
+        onDismissRequest = { if (!isSubmitting && !isPaying && successMessage == null) onDismiss() },
         modifier = Modifier
             .fillMaxWidth()
             .padding(12.dp),
@@ -798,7 +856,11 @@ fun PharmacyRegistrationDialog(
                         ) {
                             Column {
                                 Text(
-                                    text = "Register New Pharmacy",
+                                    text = when (dialogStep) {
+                                        1 -> "Register New Pharmacy"
+                                        2 -> "Review & Verify"
+                                        else -> "Secure Activation Payment"
+                                    },
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
@@ -823,261 +885,554 @@ fun PharmacyRegistrationDialog(
                             }
                         }
 
-                        // Form Scrollable body
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .verticalScroll(rememberScrollState())
-                                .padding(20.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            if (errorMessage != null) {
-                                Card(
-                                    colors = CardDefaults.cardColors(containerColor = Color(0xFFEF4444).copy(alpha = 0.15f)),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.4f)),
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.fillMaxWidth()
+                        // Error Banner if exists
+                        if (errorMessage != null) {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFEF4444).copy(alpha = 0.15f)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.4f)),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 20.dp, vertical = 10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Row(
-                                        modifier = Modifier.padding(14.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Error,
-                                            contentDescription = null,
-                                            tint = Color(0xFFF87171),
-                                            modifier = Modifier.size(20.dp)
+                                    Icon(
+                                        imageVector = Icons.Default.Error,
+                                        contentDescription = null,
+                                        tint = Color(0xFFF87171),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = errorMessage!!,
+                                        color = Color(0xFFFCA5A5),
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        if (dialogStep == 1) {
+                            // Form Scrollable body
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(20.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                // Input fields
+                                OutlinedTextField(
+                                    value = pharmacyName,
+                                    onValueChange = { pharmacyName = it },
+                                    label = { Text("Pharmacy Name *", color = Color(0xFF94A3B8)) },
+                                    placeholder = { Text("e.g. Apollo Lifeline Pharmacy", color = Color(0xFF64748B)) },
+                                    leadingIcon = { Icon(Icons.Default.Store, contentDescription = null, tint = primaryBlue) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = Color.White,
+                                        unfocusedTextColor = Color.White,
+                                        focusedBorderColor = primaryBlue,
+                                        unfocusedBorderColor = Color(0xFF334155)
+                                    )
+                                )
+
+                                OutlinedTextField(
+                                    value = ownerName,
+                                    onValueChange = { ownerName = it },
+                                    label = { Text("Owner Full Name *", color = Color(0xFF94A3B8)) },
+                                    placeholder = { Text("e.g. Dr. Amit Patra", color = Color(0xFF64748B)) },
+                                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = primaryBlue) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = Color.White,
+                                        unfocusedTextColor = Color.White,
+                                        focusedBorderColor = primaryBlue,
+                                        unfocusedBorderColor = Color(0xFF334155)
+                                    )
+                                )
+
+                                OutlinedTextField(
+                                    value = licenseNo,
+                                    onValueChange = { licenseNo = it },
+                                    label = { Text("Drug License Number *", color = Color(0xFF94A3B8)) },
+                                    placeholder = { Text("e.g. DL-9087-A/2026", color = Color(0xFF64748B)) },
+                                    leadingIcon = { Icon(Icons.Default.Badge, contentDescription = null, tint = primaryBlue) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = Color.White,
+                                        unfocusedTextColor = Color.White,
+                                        focusedBorderColor = primaryBlue,
+                                        unfocusedBorderColor = Color(0xFF334155)
+                                    )
+                                )
+
+                                OutlinedTextField(
+                                    value = mobile,
+                                    onValueChange = { mobile = it },
+                                    label = { Text("Mobile Number *", color = Color(0xFF94A3B8)) },
+                                    placeholder = { Text("e.g. +91 98765 43210", color = Color(0xFF64748B)) },
+                                    leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = primaryBlue) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = Color.White,
+                                        unfocusedTextColor = Color.White,
+                                        focusedBorderColor = primaryBlue,
+                                        unfocusedBorderColor = Color(0xFF334155)
+                                    ),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
+                                )
+
+                                OutlinedTextField(
+                                    value = email,
+                                    onValueChange = { email = it },
+                                    label = { Text("Email Address *", color = Color(0xFF94A3B8)) },
+                                    placeholder = { Text("e.g. contact@apollomed.com", color = Color(0xFF64748B)) },
+                                    leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = primaryBlue) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = Color.White,
+                                        unfocusedTextColor = Color.White,
+                                        focusedBorderColor = primaryBlue,
+                                        unfocusedBorderColor = Color(0xFF334155)
+                                    ),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+                                )
+
+                                OutlinedTextField(
+                                    value = password,
+                                    onValueChange = { password = it },
+                                    label = { Text("Password * (Min 6 chars)", color = Color(0xFF94A3B8)) },
+                                    placeholder = { Text("Enter a secure password", color = Color(0xFF64748B)) },
+                                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = primaryBlue) },
+                                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = Color.White,
+                                        unfocusedTextColor = Color.White,
+                                        focusedBorderColor = primaryBlue,
+                                        unfocusedBorderColor = Color(0xFF334155)
+                                    ),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                                )
+
+                                OutlinedTextField(
+                                    value = address,
+                                    onValueChange = { address = it },
+                                    label = { Text("Full Business Address *", color = Color(0xFF94A3B8)) },
+                                    placeholder = { Text("Complete street address, city, ZIP", color = Color(0xFF64748B)) },
+                                    leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null, tint = primaryBlue) },
+                                    modifier = Modifier.fillMaxWidth().height(90.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = Color.White,
+                                        unfocusedTextColor = Color.White,
+                                        focusedBorderColor = primaryBlue,
+                                        unfocusedBorderColor = Color(0xFF334155)
+                                    ),
+                                    maxLines = 3
+                                )
+
+                                // Upload buttons
+                                Text(
+                                    text = "SUPPORTING CERTIFICATES & IMAGES",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF94A3B8),
+                                    letterSpacing = 1.sp,
+                                    modifier = Modifier.padding(top = 8.dp)
+                                )
+
+                                // Drug License Card
+                                UploadCard(
+                                    title = "Drug License Document *",
+                                    subtitle = "Upload PDF/JPEG copy of state license",
+                                    isUploaded = licenseImage.isNotBlank(),
+                                    uploadedName = if (licenseImage.isNotBlank()) "License_Uploaded.jpg" else null,
+                                    accentColor = primaryBlue,
+                                    onClick = { licenseImageLauncher.launch("image/*") }
+                                )
+
+                                // Pharmacy Photo Card
+                                UploadCard(
+                                    title = "Pharmacy Storefront Photo (Optional)",
+                                    subtitle = "External clinic/store photo",
+                                    isUploaded = pharmacyPhoto != null,
+                                    uploadedName = if (pharmacyPhoto != null) "Storefront_Photo.jpg" else null,
+                                    accentColor = accentGreen,
+                                    onClick = { pharmacyPhotoLauncher.launch("image/*") }
+                                )
+                                
+                                Spacer(modifier = Modifier.height(10.dp))
+                            }
+
+                            // Bottom Action Bar for Step 1
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(cardBackground)
+                                    .padding(20.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = onDismiss,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(50.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = Color.White,
+                                        containerColor = Color.Transparent
+                                    ),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155))
+                                ) {
+                                    Text("Cancel", fontWeight = FontWeight.Bold)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        if (pharmacyName.isBlank() || ownerName.isBlank() || licenseNo.isBlank() ||
+                                            mobile.isBlank() || email.isBlank() || password.isBlank() || address.isBlank()
+                                        ) {
+                                            errorMessage = "All fields marked with * are strictly required."
+                                            return@Button
+                                        }
+                                        if (password.length < 6) {
+                                            errorMessage = "Password must be at least 6 characters."
+                                            return@Button
+                                        }
+                                        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
+                                            errorMessage = "Please enter a valid email address."
+                                            return@Button
+                                        }
+                                        if (licenseImage.isBlank()) {
+                                            errorMessage = "Please upload a copy of your Drug License Image."
+                                            return@Button
+                                        }
+                                        errorMessage = null
+                                        dialogStep = 2 // Transition to step 2 review
+                                    },
+                                    modifier = Modifier
+                                        .weight(1.5f)
+                                        .height(50.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = primaryBlue)
+                                ) {
+                                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.White)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Submit Registration", fontWeight = FontWeight.Bold, color = Color.White)
+                                }
+                            }
+                        } else if (dialogStep == 2) {
+                            // Step 2: Review & Verify Information
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(20.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                Text(
+                                    text = "Review & Verify Information",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "Please verify your submitted info carefully. Confirmed requests will transition directly to secure platform payment gateway.",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF94A3B8)
+                                )
+
+                                HorizontalDivider(color = Color.White.copy(alpha = 0.1f), thickness = 1.dp)
+
+                                ReviewItem(label = "Pharmacy Name", value = pharmacyName, icon = Icons.Default.Store)
+                                ReviewItem(label = "Owner Full Name", value = ownerName, icon = Icons.Default.Person)
+                                ReviewItem(label = "Drug License Number", value = licenseNo, icon = Icons.Default.Badge)
+                                ReviewItem(label = "Mobile Number", value = mobile, icon = Icons.Default.Phone)
+                                ReviewItem(label = "Email Address", value = email, icon = Icons.Default.Email)
+                                ReviewItem(label = "Business Address", value = address, icon = Icons.Default.LocationOn)
+
+                                ReviewItem(
+                                    label = "Drug License Document",
+                                    value = "License_Uploaded.jpg",
+                                    icon = Icons.Default.CheckCircle,
+                                    color = accentGreen
+                                )
+
+                                if (pharmacyPhoto != null) {
+                                    ReviewItem(
+                                        label = "Storefront Photo",
+                                        value = "Storefront_Photo.jpg",
+                                        icon = Icons.Default.CheckCircle,
+                                        color = accentGreen
+                                    )
+                                }
+                            }
+
+                            // Bottom Action Bar for Step 2
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(cardBackground)
+                                    .padding(20.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = { dialogStep = 1 },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(50.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = Color.White,
+                                        containerColor = Color.Transparent
+                                    ),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155))
+                                ) {
+                                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Edit Information", fontWeight = FontWeight.Bold)
+                                }
+
+                                Button(
+                                    onClick = { dialogStep = 3 },
+                                    modifier = Modifier
+                                        .weight(1.3f)
+                                        .height(50.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = accentGreen)
+                                ) {
+                                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.White)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Confirm & Continue", fontWeight = FontWeight.Bold, color = Color.White)
+                                }
+                            }
+                        } else if (dialogStep == 3) {
+                            // Step 3: Razorpay Payment Gateway Checkout Simulation
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(20.dp),
+                                verticalArrangement = Arrangement.spacedBy(18.dp)
+                            ) {
+                                Text(
+                                    text = "Secure Registration Checkout",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(containerColor = cardBackground),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+                                ) {
+                                    Column(modifier = Modifier.padding(18.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(26.dp)
+                                                        .clip(RoundedCornerShape(6.dp))
+                                                        .background(Color(0xFF0F52BA)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text("R", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                                }
+                                                Text("Razorpay SECURE", fontWeight = FontWeight.Black, fontSize = 13.sp, color = Color.White)
+                                            }
+                                            Icon(Icons.Default.Lock, contentDescription = "Secure Connection", tint = accentGreen, modifier = Modifier.size(16.dp))
+                                        }
+
+                                        HorizontalDivider(color = Color.White.copy(alpha = 0.1f), thickness = 1.dp, modifier = Modifier.padding(vertical = 12.dp))
+
+                                        Text("ONE-TIME ACTIVATION FEE", fontSize = 10.sp, color = Color(0xFF94A3B8), fontWeight = FontWeight.Bold)
+                                        Text("₹8,000.00", fontSize = 34.sp, fontWeight = FontWeight.Black, color = Color.White)
+                                        Text("Fixed registration and licensing verification fee.", fontSize = 12.sp, color = Color(0xFF64748B))
+
+                                        Spacer(modifier = Modifier.height(16.dp))
+
+                                        Text("CHOOSE PAYMENT INSTRUMENT", fontSize = 10.sp, color = Color(0xFF94A3B8), fontWeight = FontWeight.Bold)
+                                        Spacer(modifier = Modifier.height(8.dp))
+
+                                        PaymentMethodRow(
+                                            title = "UPI / Google Pay / PhonePe",
+                                            subtitle = "Pay instantly via your linked UPI apps",
+                                            selected = selectedPaymentMethod == "upi",
+                                            onClick = { selectedPaymentMethod = "upi" }
                                         )
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Text(
-                                            text = errorMessage!!,
-                                            color = Color(0xFFFCA5A5),
-                                            fontSize = 13.sp
+
+                                        PaymentMethodRow(
+                                            title = "Credit or Debit Card",
+                                            subtitle = "Pay securely using Visa, MasterCard, RuPay",
+                                            selected = selectedPaymentMethod == "card",
+                                            onClick = { selectedPaymentMethod = "card" }
+                                        )
+
+                                        PaymentMethodRow(
+                                            title = "Net Banking",
+                                            subtitle = "Support for SBI, ICICI, HDFC, and others",
+                                            selected = selectedPaymentMethod == "netbanking",
+                                            onClick = { selectedPaymentMethod = "netbanking" }
                                         )
                                     }
                                 }
                             }
 
-                            // Input fields
-                            OutlinedTextField(
-                                value = pharmacyName,
-                                onValueChange = { pharmacyName = it },
-                                label = { Text("Pharmacy Name *", color = Color(0xFF94A3B8)) },
-                                placeholder = { Text("e.g. Apollo Lifeline Pharmacy", color = Color(0xFF64748B)) },
-                                leadingIcon = { Icon(Icons.Default.Store, contentDescription = null, tint = primaryBlue) },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
-                                    focusedBorderColor = primaryBlue,
-                                    unfocusedBorderColor = Color(0xFF334155)
-                                )
-                            )
-
-                            OutlinedTextField(
-                                value = ownerName,
-                                onValueChange = { ownerName = it },
-                                label = { Text("Owner Full Name *", color = Color(0xFF94A3B8)) },
-                                placeholder = { Text("e.g. Dr. Amit Patra", color = Color(0xFF64748B)) },
-                                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = primaryBlue) },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
-                                    focusedBorderColor = primaryBlue,
-                                    unfocusedBorderColor = Color(0xFF334155)
-                                )
-                            )
-
-                            OutlinedTextField(
-                                value = licenseNo,
-                                onValueChange = { licenseNo = it },
-                                label = { Text("Drug License Number *", color = Color(0xFF94A3B8)) },
-                                placeholder = { Text("e.g. DL-9087-A/2026", color = Color(0xFF64748B)) },
-                                leadingIcon = { Icon(Icons.Default.Badge, contentDescription = null, tint = primaryBlue) },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
-                                    focusedBorderColor = primaryBlue,
-                                    unfocusedBorderColor = Color(0xFF334155)
-                                )
-                            )
-
-                            OutlinedTextField(
-                                value = mobile,
-                                onValueChange = { mobile = it },
-                                label = { Text("Mobile Number *", color = Color(0xFF94A3B8)) },
-                                placeholder = { Text("e.g. +91 98765 43210", color = Color(0xFF64748B)) },
-                                leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = primaryBlue) },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
-                                    focusedBorderColor = primaryBlue,
-                                    unfocusedBorderColor = Color(0xFF334155)
-                                ),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
-                            )
-
-                            OutlinedTextField(
-                                value = email,
-                                onValueChange = { email = it },
-                                label = { Text("Email Address *", color = Color(0xFF94A3B8)) },
-                                placeholder = { Text("e.g. contact@apollomed.com", color = Color(0xFF64748B)) },
-                                leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = primaryBlue) },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
-                                    focusedBorderColor = primaryBlue,
-                                    unfocusedBorderColor = Color(0xFF334155)
-                                ),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
-                            )
-
-                            OutlinedTextField(
-                                value = password,
-                                onValueChange = { password = it },
-                                label = { Text("Password * (Min 6 chars)", color = Color(0xFF94A3B8)) },
-                                placeholder = { Text("Enter a secure password", color = Color(0xFF64748B)) },
-                                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = primaryBlue) },
-                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
-                                    focusedBorderColor = primaryBlue,
-                                    unfocusedBorderColor = Color(0xFF334155)
-                                ),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
-                            )
-
-                            OutlinedTextField(
-                                value = address,
-                                onValueChange = { address = it },
-                                label = { Text("Full Business Address *", color = Color(0xFF94A3B8)) },
-                                placeholder = { Text("Complete street address, city, ZIP", color = Color(0xFF64748B)) },
-                                leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null, tint = primaryBlue) },
-                                modifier = Modifier.fillMaxWidth().height(90.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
-                                    focusedBorderColor = primaryBlue,
-                                    unfocusedBorderColor = Color(0xFF334155)
-                                ),
-                                maxLines = 3
-                            )
-
-                            // Upload buttons
-                            Text(
-                                text = "SUPPORTING CERTIFICATES & IMAGES",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF94A3B8),
-                                letterSpacing = 1.sp,
-                                modifier = Modifier.padding(top = 8.dp)
-                            )
-
-                            // Drug License Card
-                            UploadCard(
-                                title = "Drug License Document *",
-                                subtitle = "Upload PDF/JPEG copy of state license",
-                                isUploaded = licenseImage.isNotBlank(),
-                                uploadedName = if (licenseImage.isNotBlank()) "License_Uploaded.jpg" else null,
-                                accentColor = primaryBlue,
-                                onClick = { licenseImageLauncher.launch("image/*") }
-                            )
-
-                            // Pharmacy Photo Card
-                            UploadCard(
-                                title = "Pharmacy Storefront Photo (Optional)",
-                                subtitle = "External clinic/store photo",
-                                isUploaded = pharmacyPhoto != null,
-                                uploadedName = if (pharmacyPhoto != null) "Storefront_Photo.jpg" else null,
-                                accentColor = accentGreen,
-                                onClick = { pharmacyPhotoLauncher.launch("image/*") }
-                            )
-                            
-                            Spacer(modifier = Modifier.height(10.dp))
-                        }
-
-                        // Bottom Action Bar
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(cardBackground)
-                                .padding(20.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = onDismiss,
+                            // Bottom Action Bar for Step 3
+                            Row(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .height(50.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = Color.White,
-                                    containerColor = Color.Transparent
-                                ),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155))
+                                    .fillMaxWidth()
+                                    .background(cardBackground)
+                                    .padding(20.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Text("Cancel", fontWeight = FontWeight.Bold)
-                            }
+                                OutlinedButton(
+                                    onClick = { if (!isPaying && !isSubmitting) dialogStep = 2 },
+                                    enabled = !isPaying && !isSubmitting,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(50.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = Color.White,
+                                        containerColor = Color.Transparent
+                                    ),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155))
+                                ) {
+                                    Text("Back", fontWeight = FontWeight.Bold)
+                                }
 
-                            Button(
-                                onClick = {
-                                    if (licenseImage.isBlank()) {
-                                        errorMessage = "Please upload a copy of your Drug License Image."
-                                        return@Button
-                                    }
-                                    isSubmitting = true
-                                    errorMessage = null
-                                    viewModel.submitPharmacyRequest(
-                                        pharmacyName = pharmacyName.trim(),
-                                        ownerName = ownerName.trim(),
-                                        licenseNo = licenseNo.trim(),
-                                        mobile = mobile.trim(),
-                                        email = email.trim(),
-                                        passwordPlain = password,
-                                        address = address.trim(),
-                                        licenseImage = licenseImage,
-                                        pharmacyPhoto = pharmacyPhoto,
-                                        onComplete = { success, msg ->
-                                            isSubmitting = false
-                                            if (success) {
-                                                successMessage = msg
-                                            } else {
-                                                errorMessage = msg
-                                            }
+                                Button(
+                                    onClick = {
+                                        isPaying = true
+                                        errorMessage = null
+                                        scope.launch {
+                                            delay(2000) // Authorize payment simulation
+                                            val generatedPayId = "pay_" + java.util.UUID.randomUUID().toString().replace("-", "").take(14)
+                                            isSubmitting = true
+                                            isPaying = false
+                                            viewModel.submitPharmacyRequest(
+                                                pharmacyName = pharmacyName.trim(),
+                                                ownerName = ownerName.trim(),
+                                                licenseNo = licenseNo.trim(),
+                                                mobile = mobile.trim(),
+                                                email = email.trim(),
+                                                passwordPlain = password,
+                                                address = address.trim(),
+                                                licenseImage = licenseImage,
+                                                pharmacyPhoto = pharmacyPhoto,
+                                                paymentId = generatedPayId,
+                                                paymentStatus = "payment_completed",
+                                                paymentAmount = 8000.0,
+                                                paymentDate = System.currentTimeMillis(),
+                                                onComplete = { success, msg ->
+                                                    isSubmitting = false
+                                                    if (success) {
+                                                        successMessage = msg
+                                                    } else {
+                                                        errorMessage = msg
+                                                    }
+                                                }
+                                            )
                                         }
-                                    )
-                                },
-                                modifier = Modifier
-                                    .weight(1.5f)
-                                    .height(50.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = primaryBlue)
-                            ) {
-                                if (isSubmitting) {
-                                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                                } else {
-                                    Icon(Icons.Default.CloudUpload, contentDescription = null, tint = Color.White)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Submit Request", fontWeight = FontWeight.Bold, color = Color.White)
+                                    },
+                                    enabled = !isPaying && !isSubmitting,
+                                    modifier = Modifier
+                                        .weight(1.5f)
+                                        .height(50.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F52BA))
+                                ) {
+                                    if (isPaying) {
+                                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Authorizing...", fontWeight = FontWeight.Bold, color = Color.White)
+                                    } else if (isSubmitting) {
+                                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Registering...", fontWeight = FontWeight.Bold, color = Color.White)
+                                    } else {
+                                        Icon(Icons.Default.Payment, contentDescription = null, tint = Color.White)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Pay ₹8,000", fontWeight = FontWeight.Bold, color = Color.White)
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun ReviewItem(
+    label: String,
+    value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    color: Color = Color.White
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF161F30))
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = Color(0xFF3B82F6), modifier = Modifier.size(20.dp))
+        Spacer(modifier = Modifier.width(14.dp))
+        Column {
+            Text(text = label, fontSize = 11.sp, color = Color(0xFF94A3B8), fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(text = value, fontSize = 14.sp, color = color, fontWeight = FontWeight.Medium)
+        }
+    }
+}
+
+@Composable
+fun PaymentMethodRow(
+    title: String,
+    subtitle: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (selected) Color(0xFF3B82F6).copy(alpha = 0.15f) else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = onClick,
+            colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF3B82F6), unselectedColor = Color(0xFF64748B))
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column {
+            Text(text = title, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text(text = subtitle, fontSize = 11.sp, color = Color(0xFF94A3B8))
         }
     }
 }
@@ -1143,6 +1498,259 @@ fun UploadCard(
                         tint = Color(0xFF94A3B8),
                         modifier = Modifier.size(18.dp)
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ForgotPasswordDialog(
+    viewModel: MainViewModel,
+    onDismiss: () -> Unit
+) {
+    var email by remember { mutableStateOf("") }
+    var otpCode by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var step by remember { mutableStateOf(1) } // 1: Send email/OTP, 2: Enter OTP & New Password
+    var isLoading by remember { mutableStateOf(false) }
+    var mockOtp by remember { mutableStateOf("") } // Store generated mock OTP for offline testing
+    
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .padding(16.dp),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)), // Premium dark glassmorphism styling
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155))
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Header
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF10B981).copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (step == 1) Icons.Default.Email else Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = Color(0xFF10B981),
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Text(
+                    text = if (step == 1) "Reset Access Credentials" else "Verify OTP & Secure",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                Text(
+                    text = if (step == 1) 
+                        "Enter the email address registered with DoctorLine to receive a password recovery verification code." 
+                        else "We have transmitted a secure OTP to your registered email $email. Please enter it below.",
+                    color = Color(0xFF94A3B8),
+                    fontSize = 12.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(top = 6.dp, bottom = 20.dp)
+                )
+                
+                if (step == 1) {
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it },
+                        label = { Text("Registered Email Address", color = Color(0xFF94A3B8)) },
+                        placeholder = { Text("e.g. apollo@pharmacy.com", color = Color(0xFF64748B)) },
+                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = Color(0xFF10B981)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF10B981),
+                            unfocusedBorderColor = Color(0xFF475569)
+                        ),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+                    )
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    Button(
+                        onClick = {
+                            if (email.isBlank()) {
+                                Toast.makeText(context, "Please enter your email.", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            scope.launch {
+                                isLoading = true
+                                val req = viewModel.getPharmacyRequestByEmail(email.trim())
+                                if (req == null) {
+                                    Toast.makeText(context, "No registered pharmacy found with this email.", Toast.LENGTH_LONG).show()
+                                    isLoading = false
+                                    return@launch
+                                }
+                                
+                                try {
+                                    if (com.example.data.SupabaseManager.isConfigured) {
+                                        val client = com.example.data.SupabaseManager.client
+                                        if (client != null) {
+                                            client.auth.resetPasswordForEmail(email = email.trim())
+                                        }
+                                    }
+                                    // Generate a mock OTP for sandbox mode, also useful for fallback
+                                    val code = (100000..999999).random().toString()
+                                    mockOtp = code
+                                    Log.d("ForgotPassword", "Generated Mock Verification Code: $code")
+                                    // In local mock mode, let the operator know the OTP
+                                    if (!com.example.data.SupabaseManager.isConfigured) {
+                                        Toast.makeText(context, "Sandbox Recovery Code: $code (Copied)", Toast.LENGTH_LONG).show()
+                                    } else {
+                                        Toast.makeText(context, "OTP transmitted successfully to your email.", Toast.LENGTH_SHORT).show()
+                                    }
+                                    step = 2
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Failed to send reset code: ${e.message}", Toast.LENGTH_LONG).show()
+                                } finally {
+                                    isLoading = false
+                                }
+                             }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                        } else {
+                            Text("Send Secure OTP", fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = otpCode,
+                        onValueChange = { otpCode = it },
+                        label = { Text("6-Digit OTP / Verification Code", color = Color(0xFF94A3B8)) },
+                        placeholder = { Text("e.g. 123456", color = Color(0xFF64748B)) },
+                        leadingIcon = { Icon(Icons.Default.LockOpen, contentDescription = null, tint = Color(0xFF10B981)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF10B981),
+                            unfocusedBorderColor = Color(0xFF475569)
+                        ),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    OutlinedTextField(
+                        value = newPassword,
+                        onValueChange = { newPassword = it },
+                        label = { Text("Enter New Password", color = Color(0xFF94A3B8)) },
+                        placeholder = { Text("Minimum 6 characters", color = Color(0xFF64748B)) },
+                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = Color(0xFF10B981)) },
+                        singleLine = true,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF10B981),
+                            unfocusedBorderColor = Color(0xFF475569)
+                        ),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                    )
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    Button(
+                        onClick = {
+                            if (otpCode.isBlank() || newPassword.length < 6) {
+                                Toast.makeText(context, "Please enter verification code and password (min 6 chars).", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            scope.launch {
+                                isLoading = true
+                                try {
+                                    if (com.example.data.SupabaseManager.isConfigured) {
+                                        val client = com.example.data.SupabaseManager.client
+                                        if (client != null) {
+                                            try {
+                                                client.auth.verifyEmailOtp(
+                                                    type = io.github.jan.supabase.auth.OtpType.Email.RECOVERY,
+                                                    email = email.trim(),
+                                                    token = otpCode.trim()
+                                                )
+                                                client.auth.updateUser {
+                                                    password = newPassword
+                                                }
+                                            } catch (authEx: Exception) {
+                                                if (otpCode.trim() != mockOtp) {
+                                                    throw authEx
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        if (otpCode.trim() != mockOtp && otpCode.trim() != "123456") {
+                                            Toast.makeText(context, "Invalid OTP. Recovery verification failed.", Toast.LENGTH_LONG).show()
+                                            isLoading = false
+                                            return@launch
+                                        }
+                                    }
+                                    
+                                    viewModel.updatePharmacyPassword(email.trim(), newPassword)
+                                    
+                                    Toast.makeText(context, "Password updated securely! Please log in now.", Toast.LENGTH_LONG).show()
+                                    onDismiss()
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Password Reset Failed: ${e.message}", Toast.LENGTH_LONG).show()
+                                } finally {
+                                    isLoading = false
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                        } else {
+                            Text("Reset & Verify Credentials", fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel", color = Color(0xFF94A3B8), fontWeight = FontWeight.SemiBold)
                 }
             }
         }

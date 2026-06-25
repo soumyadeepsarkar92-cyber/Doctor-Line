@@ -45,6 +45,13 @@ fun AdminModuleScreen(
 
     val activeUser by viewModel.activeUser.collectAsState()
 
+    val activeTheme by viewModel.appTheme.collectAsState()
+    val isDark = when (activeTheme) {
+        "Dark" -> true
+        "Light" -> false
+        else -> androidx.compose.foundation.isSystemInDarkTheme()
+    }
+
     val menus = listOf(
         Pair("Dashboard", Icons.Rounded.Analytics),
         Pair("Requests", Icons.Rounded.AppRegistration),
@@ -61,7 +68,7 @@ fun AdminModuleScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF0F172A))
+                    .background(if (isDark) Color(0xFF0F0B30) else Color(0xFF4F46E5))
                     .statusBarsPadding()
             ) {
                 // Header Identity Logo & Logout
@@ -77,7 +84,7 @@ fun AdminModuleScreen(
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF5D3FD3)),
+                                .background(Color(0xFF8B5CF6)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(Icons.Rounded.Healing, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
@@ -96,16 +103,16 @@ fun AdminModuleScreen(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF1E293B))
+                            .background(if (isDark) Color(0xFF1E1B4B) else Color(0xFF4338CA))
                     ) {
-                        Icon(Icons.Rounded.Logout, contentDescription = "Log out", tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp))
+                        Icon(Icons.Rounded.Logout, contentDescription = "Log out", tint = Color.White, modifier = Modifier.size(18.dp))
                     }
                 }
 
                 // Scrollable menu tabs
                 ScrollableTabRow(
                     selectedTabIndex = menus.indexOfFirst { it.first == selectedMenu },
-                    containerColor = Color(0xFF0F172A),
+                    containerColor = if (isDark) Color(0xFF0F0B30) else Color(0xFF4F46E5),
                     contentColor = Color.White,
                     edgePadding = 16.dp,
                     indicator = { tabPositions ->
@@ -113,7 +120,7 @@ fun AdminModuleScreen(
                         if (index >= 0) {
                             TabRowDefaults.Indicator(
                                 Modifier.tabIndicatorOffset(tabPositions[index]),
-                                color = Color(0xFF5D3FD3),
+                                color = Color(0xFF8B5CF6),
                                 height = 3.dp
                             )
                         }
@@ -126,7 +133,7 @@ fun AdminModuleScreen(
                             selected = isSelected,
                             onClick = { selectedMenu = title },
                             selectedContentColor = Color.White,
-                            unselectedContentColor = Color(0xFF94A3B8),
+                            unselectedContentColor = if (isDark) Color(0xFF818CF8) else Color(0xFFC7D2FE),
                             text = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(imageVector = icon, contentDescription = title, modifier = Modifier.size(16.dp))
@@ -139,7 +146,7 @@ fun AdminModuleScreen(
                 }
             }
         },
-        containerColor = Color(0xFFF8FAFC)
+        containerColor = if (isDark) Color(0xFF090520) else Color(0xFFF5F3FF)
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -204,36 +211,105 @@ fun AdminDashboardView(viewModel: MainViewModel) {
     val doctors by viewModel.allDoctors.collectAsState()
     val bookings by viewModel.allBookings.collectAsState()
 
+    val activeTheme by viewModel.appTheme.collectAsState()
+    val isDark = when (activeTheme) {
+        "Dark" -> true
+        "Light" -> false
+        else -> androidx.compose.foundation.isSystemInDarkTheme()
+    }
+
+    val glassBg = if (isDark) Color(0xFF1E1B4B).copy(alpha = 0.55f) else Color(0xFFF5F3FF).copy(alpha = 0.9f)
+    val glassBorder = if (isDark) Color(0xFF6366F1).copy(alpha = 0.4f) else Color(0xFF6366F1).copy(alpha = 0.25f)
+    val glassText = if (isDark) Color(0xFFE0E7FF) else Color(0xFF1E1B4B)
+    val glassSubText = if (isDark) Color(0xFF818CF8) else Color(0xFF4F46E5)
+
     val todayDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
     val totalPharmacies = pharmacies.size
     val activePharmacies = pharmacies.count { it.status == "Active" }
     val suspendedPharmacies = pharmacies.count { it.status == "Suspended" }
     val totalPatients = maxOf(12, bookings.map { it.patientPhone }.distinct().size)
     val totalDoctors = doctors.size
+    val totalAppointments = bookings.size
     val revenue = bookings.filter { it.status == "Completed" || it.status == "Upcoming" }.sumOf { 800.0 }
-    val todayAppointmentsCount = bookings.count { it.dateStr == todayDate }
+
+    // Subscription & SaaS KPIs
+    val trialPharmaciesCount = pharmacies.count { phar ->
+        phar.trialStarted && phar.status == "Active" && viewModel.calculateDaysBetween(todayDate, phar.subscriptionExpiry) >= 0
+    }
+    val expiringSoonCount = pharmacies.count { phar ->
+        if (phar.subscriptionExpiry.isEmpty()) false
+        else {
+            val days = viewModel.calculateDaysBetween(todayDate, phar.subscriptionExpiry)
+            days in 0..7
+        }
+    }
+    val gracePeriodCount = pharmacies.count { phar ->
+        if (phar.subscriptionExpiry.isEmpty()) false
+        else {
+            val days = viewModel.calculateDaysBetween(todayDate, phar.subscriptionExpiry)
+            days < 0 && days > -5
+        }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Aggregate dynamic grid for SaaS KPI Cockpit (7 Cards)
+        // Aggregate dynamic grid for SaaS KPI Cockpit (10 Cards)
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    AdminMetricItem(
+                        label = "Total Revenue",
+                        value = "₹${revenue.toInt()}",
+                        color = Color(0xFF8B5CF6),
+                        icon = Icons.Rounded.Payments,
+                        modifier = Modifier.weight(1f),
+                        viewModel = viewModel
+                    )
+                    AdminMetricItem(
+                        label = "Total Appointments",
+                        value = totalAppointments.toString(),
+                        color = Color(0xFFEC4899),
+                        icon = Icons.Rounded.EventAvailable,
+                        modifier = Modifier.weight(1f),
+                        viewModel = viewModel
+                    )
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                     AdminMetricItem(
                         label = "Total Pharmacies",
                         value = totalPharmacies.toString(),
                         color = Color(0xFF10B981),
                         icon = Icons.Rounded.LocalPharmacy,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        viewModel = viewModel
                     )
                     AdminMetricItem(
                         label = "Active Pharmacies",
                         value = activePharmacies.toString(),
                         color = Color(0xFF0D9488),
                         icon = Icons.Rounded.CheckCircle,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        viewModel = viewModel
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    AdminMetricItem(
+                        label = "Trial Pharmacies",
+                        value = trialPharmaciesCount.toString(),
+                        color = Color(0xFF6366F1),
+                        icon = Icons.Rounded.Analytics,
+                        modifier = Modifier.weight(1f),
+                        viewModel = viewModel
+                    )
+                    AdminMetricItem(
+                        label = "Grace Period Users",
+                        value = gracePeriodCount.toString(),
+                        color = Color(0xFFF59E0B),
+                        icon = Icons.Rounded.Timer,
+                        modifier = Modifier.weight(1f),
+                        viewModel = viewModel
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
@@ -242,14 +318,16 @@ fun AdminDashboardView(viewModel: MainViewModel) {
                         value = suspendedPharmacies.toString(),
                         color = Color(0xFFEF4444),
                         icon = Icons.Rounded.Block,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        viewModel = viewModel
                     )
                     AdminMetricItem(
                         label = "Total Doctors",
                         value = totalDoctors.toString(),
-                        color = Color(0xFFF59E0B),
+                        color = Color(0xFF8B5CF6),
                         icon = Icons.Rounded.PersonSearch,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        viewModel = viewModel
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
@@ -258,25 +336,17 @@ fun AdminDashboardView(viewModel: MainViewModel) {
                         value = totalPatients.toString(),
                         color = Color(0xFF3B82F6),
                         icon = Icons.Rounded.People,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        viewModel = viewModel
                     )
                     AdminMetricItem(
-                        label = "Monthly Revenue",
-                        value = "₹${revenue.toInt()}",
-                        color = Color(0xFF8B5CF6),
-                        icon = Icons.Rounded.Payments,
-                        modifier = Modifier.weight(1f)
+                        label = "Expiring Subscriptions",
+                        value = expiringSoonCount.toString(),
+                        color = Color(0xFFF97316),
+                        icon = Icons.Rounded.Warning,
+                        modifier = Modifier.weight(1f),
+                        viewModel = viewModel
                     )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    AdminMetricItem(
-                        label = "Today's Appointments",
-                        value = todayAppointmentsCount.toString(),
-                        color = Color(0xFFEC4899),
-                        icon = Icons.Rounded.EventAvailable,
-                        modifier = Modifier.weight(0.5f)
-                    )
-                    Box(modifier = Modifier.weight(0.5f))
                 }
             }
         }
@@ -296,14 +366,15 @@ fun AdminDashboardView(viewModel: MainViewModel) {
                         .height(240.dp)
                         .shadow(1.dp, shape = RoundedCornerShape(16.dp)),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                    colors = CardDefaults.cardColors(containerColor = glassBg),
+                    border = BorderStroke(1.2.dp, glassBorder)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
                             text = "Platform Monthly Earnings Growth",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF334155)
+                            color = glassText
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         
@@ -349,7 +420,7 @@ fun AdminDashboardView(viewModel: MainViewModel) {
                                 brush = Brush.verticalGradient(
                                     colors = listOf(
                                         Color(0xFF8B5CF6).copy(alpha = 0.3f),
-                                        Color.White.copy(alpha = 0.0f)
+                                        Color.Transparent
                                     )
                                 )
                             )
@@ -373,7 +444,8 @@ fun AdminDashboardView(viewModel: MainViewModel) {
                         .height(240.dp)
                         .shadow(1.dp, shape = RoundedCornerShape(16.dp)),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                    colors = CardDefaults.cardColors(containerColor = glassBg),
+                    border = BorderStroke(1.2.dp, glassBorder)
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
@@ -383,7 +455,7 @@ fun AdminDashboardView(viewModel: MainViewModel) {
                             text = "Plan Shares",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF334155),
+                            color = glassText,
                             modifier = Modifier.align(Alignment.Start)
                         )
                         Spacer(modifier = Modifier.height(20.dp))
@@ -399,7 +471,7 @@ fun AdminDashboardView(viewModel: MainViewModel) {
                                     size = Size(size.width, size.height)
                                 )
                                 drawArc(
-                                    color = Color(0xFF00A86B), // Basic Monthly Share
+                                    color = Color(0xFF10B981), // Basic Monthly Share
                                     startAngle = 90f,
                                     sweepAngle = 120f,
                                     useCenter = true,
@@ -422,9 +494,9 @@ fun AdminDashboardView(viewModel: MainViewModel) {
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            PieMetricLegend(color = Color(0xFF8B5CF6), title = "Pro (50%)")
-                            PieMetricLegend(color = Color(0xFF00A86B), title = "Monthly (33%)")
-                            PieMetricLegend(color = Color(0xFF3B82F6), title = "Corp (17%)")
+                            PieMetricLegend(color = Color(0xFF8B5CF6), title = "Pro (50%)", viewModel = viewModel)
+                            PieMetricLegend(color = Color(0xFF10B981), title = "Monthly (33%)", viewModel = viewModel)
+                            PieMetricLegend(color = Color(0xFF3B82F6), title = "Corp (17%)", viewModel = viewModel)
                         }
                     }
                 }
@@ -439,13 +511,26 @@ fun AdminMetricItem(
     value: String,
     color: Color,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: MainViewModel
 ) {
+    val activeTheme by viewModel.appTheme.collectAsState()
+    val isDark = when (activeTheme) {
+        "Dark" -> true
+        "Light" -> false
+        else -> androidx.compose.foundation.isSystemInDarkTheme()
+    }
+
+    val glassBg = if (isDark) Color(0xFF1E1B4B).copy(alpha = 0.55f) else Color(0xFFF5F3FF).copy(alpha = 0.9f)
+    val glassBorder = if (isDark) Color(0xFF6366F1).copy(alpha = 0.4f) else Color(0xFF6366F1).copy(alpha = 0.25f)
+    val glassText = if (isDark) Color(0xFFE0E7FF) else Color(0xFF1E1B4B)
+    val glassSubText = if (isDark) Color(0xFF818CF8) else Color(0xFF4F46E5)
+
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = glassBg),
+        border = BorderStroke(1.2.dp, glassBorder)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -453,17 +538,32 @@ fun AdminMetricItem(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = label, fontSize = 11.sp, color = Color(0xFF64748B), fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    text = label.uppercase(), 
+                    fontSize = 9.sp, 
+                    color = glassSubText, 
+                    fontWeight = FontWeight.Bold, 
+                    maxLines = 1, 
+                    overflow = TextOverflow.Ellipsis
+                )
                 Icon(imageVector = icon, contentDescription = null, tint = color, modifier = Modifier.size(16.dp))
             }
             Spacer(modifier = Modifier.height(10.dp))
-            Text(text = value, fontSize = 20.sp, fontWeight = FontWeight.Black, color = Color(0xFF0F172A))
+            Text(text = value, fontSize = 20.sp, fontWeight = FontWeight.Black, color = glassText)
         }
     }
 }
 
 @Composable
-fun PieMetricLegend(color: Color, title: String) {
+fun PieMetricLegend(color: Color, title: String, viewModel: MainViewModel) {
+    val activeTheme by viewModel.appTheme.collectAsState()
+    val isDark = when (activeTheme) {
+        "Dark" -> true
+        "Light" -> false
+        else -> androidx.compose.foundation.isSystemInDarkTheme()
+    }
+    val textColor = if (isDark) Color(0xFF818CF8) else Color(0xFF475569)
+
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
@@ -472,7 +572,7 @@ fun PieMetricLegend(color: Color, title: String) {
                 .background(color)
         )
         Spacer(modifier = Modifier.width(4.dp))
-        Text(text = title, fontSize = 9.sp, color = Color(0xFF475569), fontWeight = FontWeight.Bold)
+        Text(text = title, fontSize = 9.sp, color = textColor, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -482,6 +582,11 @@ fun PieMetricLegend(color: Color, title: String) {
 @Composable
 fun AdminPharmaciesView(viewModel: MainViewModel) {
     val pharmacies by viewModel.allPharmacies.collectAsState()
+    val pricingSettings by viewModel.pricingSettings.collectAsState()
+
+    val monthly = pricingSettings?.monthlySubscriptionFee ?: 10.0
+    val quarterly = pricingSettings?.quarterlySubscriptionFee ?: 30.0
+    val yearly = pricingSettings?.yearlySubscriptionFee ?: 100.0
     
     var showAddDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
@@ -498,7 +603,7 @@ fun AdminPharmaciesView(viewModel: MainViewModel) {
     var pharCreatedDate by remember { mutableStateOf("") }
     var pharPlan by remember { mutableStateOf("Basic") }
     var pharExpiry by remember { mutableStateOf("2026-07-22") }
-    var pharAmount by remember { mutableStateOf("499") }
+    var pharAmount by remember { mutableStateOf(monthly.toInt().toString()) }
     var pharPaymentStatus by remember { mutableStateOf("Paid") }
 
     // Helper to open Add Dialog
@@ -511,7 +616,7 @@ fun AdminPharmaciesView(viewModel: MainViewModel) {
         pharStatus = "Active"
         pharPlan = "Basic"
         pharExpiry = "2026-07-22"
-        pharAmount = "499"
+        pharAmount = monthly.toInt().toString()
         pharPaymentStatus = "Paid"
         pharCreatedDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
         showAddDialog = true
@@ -779,10 +884,10 @@ fun AdminPharmaciesView(viewModel: MainViewModel) {
                         value = pharPlan,
                         onValueChange = { 
                             pharPlan = it
-                            pharAmount = when(it) {
-                                "Premium" -> "999"
-                                "Enterprise" -> "1999"
-                                else -> "499"
+                            pharAmount = when {
+                                it.contains("Premium", ignoreCase = true) || it.contains("Quarterly", ignoreCase = true) -> quarterly.toInt().toString()
+                                it.contains("Enterprise", ignoreCase = true) || it.contains("Yearly", ignoreCase = true) -> yearly.toInt().toString()
+                                else -> monthly.toInt().toString()
                             }
                         },
                         label = { Text("SaaS Plan (Basic, Premium, Enterprise)") },
@@ -887,10 +992,10 @@ fun AdminPharmaciesView(viewModel: MainViewModel) {
                         value = pharPlan,
                         onValueChange = { 
                             pharPlan = it
-                            pharAmount = when(it) {
-                                "Premium" -> "999"
-                                "Enterprise" -> "1999"
-                                else -> "499"
+                            pharAmount = when {
+                                it.contains("Premium", ignoreCase = true) || it.contains("Quarterly", ignoreCase = true) -> quarterly.toInt().toString()
+                                it.contains("Enterprise", ignoreCase = true) || it.contains("Yearly", ignoreCase = true) -> yearly.toInt().toString()
+                                else -> monthly.toInt().toString()
                             }
                         },
                         label = { Text("SaaS Plan (Basic, Premium, Enterprise)") },
@@ -999,12 +1104,28 @@ fun TableFieldRow(label: String, value: String) {
 @Composable
 fun AdminSubscriptionsView(viewModel: MainViewModel) {
     val pharmacies by viewModel.allPharmacies.collectAsState()
+    val pricingSettings by viewModel.pricingSettings.collectAsState()
+
+    val monthly = pricingSettings?.monthlySubscriptionFee ?: 10.0
+    val quarterly = pricingSettings?.quarterlySubscriptionFee ?: 30.0
+    val yearly = pricingSettings?.yearlySubscriptionFee ?: 100.0
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         items(pharmacies) { phar ->
+            val planAmount = when {
+                phar.subscriptionPlan.contains("Quarterly", ignoreCase = true) -> quarterly
+                phar.subscriptionPlan.contains("Yearly", ignoreCase = true) -> yearly
+                else -> monthly
+            }
+            val planLabel = when {
+                phar.subscriptionPlan.contains("Quarterly", ignoreCase = true) -> "/Qtr"
+                phar.subscriptionPlan.contains("Yearly", ignoreCase = true) -> "/Yr"
+                else -> "/Mo"
+            }
+
             Card(
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -1016,11 +1137,11 @@ fun AdminSubscriptionsView(viewModel: MainViewModel) {
                         Spacer(modifier = Modifier.width(16.dp))
                         Column {
                             Text(text = phar.name, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            Text(text = "Standard Corporate Pro Plan", fontSize = 12.sp, color = Color(0xFF475569))
-                            Text(text = "Renews 2026-09-20  •  Razorpay", fontSize = 11.sp, color = Color(0xFF64748B))
+                            Text(text = phar.subscriptionPlan, fontSize = 12.sp, color = Color(0xFF475569))
+                            Text(text = "Expires ${phar.subscriptionExpiry}  •  Online", fontSize = 11.sp, color = Color(0xFF64748B))
                         }
                     }
-                    Text(text = "₹299/Mo", fontWeight = FontWeight.Black, color = Color(0xFF8B5CF6), fontSize = 15.sp)
+                    Text(text = "₹${planAmount.toInt()}$planLabel", fontWeight = FontWeight.Black, color = Color(0xFF8B5CF6), fontSize = 15.sp)
                 }
             }
         }
@@ -1197,6 +1318,96 @@ fun AdminSettingsView(viewModel: MainViewModel, logout: () -> Unit) {
                     color = Color(0xFF64748B),
                     lineHeight = 18.sp
                 )
+            }
+        }
+
+        // Configurable Pricing Settings Card
+        val pricingSettings by viewModel.pricingSettings.collectAsState()
+        val context = androidx.compose.ui.platform.LocalContext.current
+
+        var regFee by remember(pricingSettings) { mutableStateOf(pricingSettings?.registrationFee?.toString() ?: "10.0") }
+        var monthlyFee by remember(pricingSettings) { mutableStateOf(pricingSettings?.monthlySubscriptionFee?.toString() ?: "10.0") }
+        var quarterlyFee by remember(pricingSettings) { mutableStateOf(pricingSettings?.quarterlySubscriptionFee?.toString() ?: "30.0") }
+        var yearlyFee by remember(pricingSettings) { mutableStateOf(pricingSettings?.yearlySubscriptionFee?.toString() ?: "100.0") }
+
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(
+                    text = "Configurable SaaS Pricing Settings",
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0F172A),
+                    fontSize = 14.sp
+                )
+                Text(
+                    text = "Configure pricing values used platform-wide. Changes take effect instantly without any code modifications.",
+                    fontSize = 12.sp,
+                    color = Color(0xFF64748B)
+                )
+
+                OutlinedTextField(
+                    value = regFee,
+                    onValueChange = { regFee = it },
+                    label = { Text("Registration Fee (₹)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                    )
+                )
+
+                OutlinedTextField(
+                    value = monthlyFee,
+                    onValueChange = { monthlyFee = it },
+                    label = { Text("Monthly Subscription Fee (₹)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                    )
+                )
+
+                OutlinedTextField(
+                    value = quarterlyFee,
+                    onValueChange = { quarterlyFee = it },
+                    label = { Text("Quarterly Subscription Fee (₹)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                    )
+                )
+
+                OutlinedTextField(
+                    value = yearlyFee,
+                    onValueChange = { yearlyFee = it },
+                    label = { Text("Yearly Subscription Fee (₹)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                    )
+                )
+
+                Button(
+                    onClick = {
+                        val rF = regFee.toDoubleOrNull()
+                        val mF = monthlyFee.toDoubleOrNull()
+                        val qF = quarterlyFee.toDoubleOrNull()
+                        val yF = yearlyFee.toDoubleOrNull()
+
+                        if (rF != null && mF != null && qF != null && yF != null) {
+                            viewModel.savePricingSettings(rF, mF, qF, yF)
+                            android.widget.Toast.makeText(context, "Pricing settings updated successfully!", android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            android.widget.Toast.makeText(context, "Please enter valid numbers for all fees.", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F52BA)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Save Pricing Settings", color = Color.White, fontWeight = FontWeight.Bold)
+                }
             }
         }
 
