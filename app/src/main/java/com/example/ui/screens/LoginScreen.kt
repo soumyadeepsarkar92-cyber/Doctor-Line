@@ -6,6 +6,11 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.res.painterResource
+import com.example.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -54,6 +59,24 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Store
+import androidx.compose.material.icons.rounded.Storefront
+import androidx.compose.material.icons.rounded.ContactMail
+import androidx.compose.material.icons.rounded.Map
+import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.CreditCard
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.ArrowDropUp
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Security
+import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.AssignmentTurnedIn
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
 
 @Composable
 fun LoginScreen(
@@ -84,31 +107,176 @@ fun LoginScreen(
     // Modern Medical Archetypes
     val primaryColor = Color(0xFF2563EB) // Clean Blue
     val secondaryColor = Color(0xFF10B981) // Clinical Green
+    val indigoColor = Color(0xFF4F46E5) // Executive Indigo
+    
     val accentColor = when (selectedRole) {
         "Patient" -> primaryColor
         "Pharmacy" -> secondaryColor
-        else -> Color(0xFF8B5CF6) // Royal Purple for Admin
+        else -> indigoColor // Corporate Indigo for Admin
     }
 
-    val backgroundColor = if (isDark) Color(0xFF0F172A) else Color(0xFFF8FAFC)
     val cardColor = if (isDark) Color(0xFF1E293B) else Color.White
     val textColor = if (isDark) Color.White else Color(0xFF1E293B)
     val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
 
+    // Animated colors for dynamic role transition (Blue, Green, Indigo)
+    val bgStartColor by animateColorAsState(
+        targetValue = when (selectedRole) {
+            "Patient" -> if (isDark) Color(0xFF0F172A) else Color(0xFFEFF6FF)
+            "Pharmacy" -> if (isDark) Color(0xFF022C22) else Color(0xFFF0FDF4)
+            else -> if (isDark) Color(0xFF1E1B4B) else Color(0xFFF5F3FF) // Admin
+        },
+        animationSpec = tween(durationMillis = 800),
+        label = "bgStart"
+    )
+
+    val bgEndColor by animateColorAsState(
+        targetValue = when (selectedRole) {
+            "Patient" -> if (isDark) Color(0xFF1E3A8A) else Color(0xFFDBEAFE)
+            "Pharmacy" -> if (isDark) Color(0xFF064E3B) else Color(0xFFDCFCE7)
+            else -> if (isDark) Color(0xFF312E81) else Color(0xFFEDE9FE) // Admin
+        },
+        animationSpec = tween(durationMillis = 800),
+        label = "bgEnd"
+    )
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundColor)
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(bgStartColor, bgEndColor)
+                )
+            )
             .statusBarsPadding()
             .navigationBarsPadding(),
         contentAlignment = Alignment.Center
     ) {
+        // Subtle Background Decorative Visuals (Phase-based & Role-specific)
+        Crossfade(
+            targetState = selectedRole,
+            animationSpec = tween(durationMillis = 800),
+            label = "roleDecoration"
+        ) { role ->
+            val decorColor = when (role) {
+                "Patient" -> Color(0xFF3B82F6).copy(alpha = if (isDark) 0.08f else 0.04f)
+                "Pharmacy" -> Color(0xFF10B981).copy(alpha = if (isDark) 0.08f else 0.04f)
+                else -> Color(0xFF6366F1).copy(alpha = if (isDark) 0.08f else 0.04f)
+            }
+            
+            Box(modifier = Modifier.fillMaxSize()) {
+                when (role) {
+                    "Patient" -> {
+                        // Calm Medical Experience: soft concentric healthcare circles and waves
+                        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                            drawCircle(
+                                color = decorColor,
+                                radius = 280.dp.toPx(),
+                                center = androidx.compose.ui.geometry.Offset(size.width * 0.1f, size.height * 0.2f)
+                            )
+                            drawCircle(
+                                color = decorColor,
+                                radius = 180.dp.toPx(),
+                                center = androidx.compose.ui.geometry.Offset(size.width * 0.1f, size.height * 0.2f)
+                            )
+                            // Soft cross outline
+                            val crossSize = 80.dp.toPx()
+                            val cx = size.width * 0.85f
+                            val cy = size.height * 0.15f
+                            drawRect(
+                                color = decorColor,
+                                topLeft = androidx.compose.ui.geometry.Offset(cx - crossSize / 6, cy - crossSize / 2),
+                                size = androidx.compose.ui.geometry.Size(crossSize / 3, crossSize)
+                            )
+                            drawRect(
+                                color = decorColor,
+                                topLeft = androidx.compose.ui.geometry.Offset(cx - crossSize / 2, cy - crossSize / 6),
+                                size = androidx.compose.ui.geometry.Size(crossSize, crossSize / 3)
+                            )
+                        }
+                    }
+                    "Pharmacy" -> {
+                        // Business Dashboard Feeling: clean technical grids and medical ledger shapes
+                        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                            // Draw subtle grid lines
+                            val gridSize = 40.dp.toPx()
+                            var x = 0f
+                            while (x < size.width) {
+                                drawLine(
+                                    color = decorColor.copy(alpha = decorColor.alpha * 0.4f),
+                                    start = androidx.compose.ui.geometry.Offset(x, 0f),
+                                    end = androidx.compose.ui.geometry.Offset(x, size.height),
+                                    strokeWidth = 1.dp.toPx()
+                                )
+                                x += gridSize
+                            }
+                            var y = 0f
+                            while (y < size.height) {
+                                drawLine(
+                                    color = decorColor.copy(alpha = decorColor.alpha * 0.4f),
+                                    start = androidx.compose.ui.geometry.Offset(0f, y),
+                                    end = androidx.compose.ui.geometry.Offset(size.width, y),
+                                    strokeWidth = 1.dp.toPx()
+                                )
+                                y += gridSize
+                            }
+                            // Tech pill shape
+                            drawRoundRect(
+                                color = decorColor,
+                                topLeft = androidx.compose.ui.geometry.Offset(size.width * 0.75f, size.height * 0.12f),
+                                size = androidx.compose.ui.geometry.Size(120.dp.toPx(), 48.dp.toPx()),
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(24.dp.toPx(), 24.dp.toPx())
+                            )
+                        }
+                    }
+                    "Admin" -> {
+                        // Analytics & Executive Dashboard: flowing trend curves and circles
+                        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                            // Flowing analytics bezier curve
+                            val path = androidx.compose.ui.graphics.Path().apply {
+                                moveTo(0f, size.height * 0.3f)
+                                cubicTo(
+                                    size.width * 0.25f, size.height * 0.15f,
+                                    size.width * 0.5f, size.height * 0.45f,
+                                    size.width * 0.75f, size.height * 0.2f
+                                )
+                                lineTo(size.width, size.height * 0.35f)
+                            }
+                            drawPath(
+                                path = path,
+                                color = decorColor,
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                    width = 3.dp.toPx(),
+                                    pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(15f, 15f), 0f)
+                                )
+                            )
+                            // Analytics dot details
+                            drawCircle(
+                                color = decorColor.copy(alpha = decorColor.alpha * 2f),
+                                radius = 8.dp.toPx(),
+                                center = androidx.compose.ui.geometry.Offset(size.width * 0.5f, size.height * 0.35f)
+                            )
+                            drawCircle(
+                                color = decorColor,
+                                radius = 200.dp.toPx(),
+                                center = androidx.compose.ui.geometry.Offset(size.width * 0.9f, size.height * 0.8f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         if (showOAuthWebView) {
             // Full Screen Overlay WebView to solve overlap
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(backgroundColor)
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(bgStartColor, bgEndColor)
+                        )
+                    )
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     // Header of WebView
@@ -199,11 +367,20 @@ fun LoginScreen(
 
                                     override fun onReceivedError(
                                         view: WebView?,
-                                        errorCode: Int,
-                                        description: String?,
-                                        failingUrl: String?
+                                        request: android.webkit.WebResourceRequest?,
+                                        error: android.webkit.WebResourceError?
                                     ) {
-                                        super.onReceivedError(view, errorCode, description, failingUrl)
+                                        super.onReceivedError(view, request, error)
+                                        val description = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                                            error?.description?.toString()
+                                        } else {
+                                            error?.toString()
+                                        }
+                                        val failingUrl = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                                            request?.url?.toString()
+                                        } else {
+                                            null
+                                        }
                                         android.util.Log.e("OAuthWebView", "Error received: $description failingUrl: $failingUrl")
                                     }
                                 }
@@ -256,21 +433,12 @@ fun LoginScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(bottom = 6.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(accentColor),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Healing,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                        contentDescription = "DoctorLine Logo",
+                        modifier = Modifier.size(44.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "DoctorLine",
                         fontSize = 26.sp,
@@ -336,7 +504,7 @@ fun LoginScreen(
                         title = "Admin",
                         icon = Icons.Rounded.AdminPanelSettings,
                         isSelected = selectedRole == "Admin",
-                        activeColor = Color(0xFF8B5CF6),
+                        activeColor = indigoColor,
                         inactiveContainerColor = cardColor,
                         textColor = textColor,
                         modifier = Modifier.weight(1f),
@@ -722,25 +890,410 @@ fun PharmacyRegistrationDialog(
     viewModel: MainViewModel,
     onDismiss: () -> Unit
 ) {
+    val activeTheme by viewModel.appTheme.collectAsState()
+    val isDark = when (activeTheme) {
+        "Dark" -> true
+        "Light" -> false
+        else -> androidx.compose.foundation.isSystemInDarkTheme()
+    }
+
+    val dialogBgColor = if (isDark) Color(0xFF0F172A) else Color(0xFFFAFAFA)
+    val cardBgColor = if (isDark) Color(0xFF1E293B) else Color(0xFFFFFFFF)
+    val accentGreen = Color(0xFF22C55E)
+    val brandPurple = Color(0xFF6C5DD3)
+    val textPrimary = if (isDark) Color.White else Color(0xFF0F172A)
+    val textSecondary = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
+    val borderLineColor = if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)
+
+    val indiaStatesData = mapOf(
+        "Andhra Pradesh" to mapOf(
+            "Visakhapatnam" to mapOf(
+                "Visakhapatnam Port" to listOf("Visakhapatnam Port PO - 530001", "Maharani Peta PO - 530002"),
+                "Gajuwaka" to listOf("Gajuwaka PO - 530026", "Srinagar PO - 530012")
+            ),
+            "Vijayawada" to mapOf(
+                "Governorpet" to listOf("Governorpet PO - 520002"),
+                "Patamata" to listOf("Patamata PO - 520010")
+            )
+        ),
+        "Arunachal Pradesh" to mapOf(
+            "Itanagar" to mapOf(
+                "Itanagar PS" to listOf("Itanagar PO - 791111"),
+                "Naharlagun PS" to listOf("Naharlagun PO - 791110")
+            )
+        ),
+        "Assam" to mapOf(
+            "Kamrup Metropolitan" to mapOf(
+                "Dispur" to listOf("Dispur PO - 781006"),
+                "Paltan Bazaar" to listOf("Guwahati PO - 781001")
+            )
+        ),
+        "Bihar" to mapOf(
+            "Patna" to mapOf(
+                "Kotwali" to listOf("Patna GPO - 800001"),
+                "Kankarbagh" to listOf("Kankarbagh PO - 800020")
+            )
+        ),
+        "Chhattisgarh" to mapOf(
+            "Raipur" to mapOf(
+                "Civil Lines" to listOf("Raipur GPO - 492001"),
+                "Pandri" to listOf("Pandri PO - 492004")
+            )
+        ),
+        "Goa" to mapOf(
+            "North Goa" to mapOf(
+                "Panaji" to listOf("Panaji PO - 403001"),
+                "Mapusa" to listOf("Mapusa PO - 403507")
+            ),
+            "South Goa" to mapOf(
+                "Margao" to listOf("Margao PO - 403601"),
+                "Vasco da Gama" to listOf("Vasco da Gama PO - 403802")
+            )
+        ),
+        "Gujarat" to mapOf(
+            "Ahmedabad" to mapOf(
+                "Navrangpura" to listOf("Navrangpura PO - 380009"),
+                "Maninagar" to listOf("Maninagar PO - 380008")
+            ),
+            "Surat" to mapOf(
+                "Adajan" to listOf("Adajan DN PO - 395009"),
+                "Athwalines" to listOf("Surat PO - 395001")
+            )
+        ),
+        "Haryana" to mapOf(
+            "Gurugram" to mapOf(
+                "DLF Phase 3" to listOf("DLF QE PO - 122002"),
+                "Sector 15" to listOf("Gurgaon PO - 122001")
+            )
+        ),
+        "Himachal Pradesh" to mapOf(
+            "Shimla" to mapOf(
+                "Mall Road" to listOf("Shimla GPO - 171001"),
+                "Chotta Shimla" to listOf("Chotta Shimla PO - 171002")
+            )
+        ),
+        "Jharkhand" to mapOf(
+            "Ranchi" to mapOf(
+                "Lalpur" to listOf("Ranchi GPO - 834001"),
+                "Dhurwa" to listOf("Dhurwa PO - 834004")
+            )
+        ),
+        "Karnataka" to mapOf(
+            "Bengaluru" to mapOf(
+                "Koramangala" to listOf("Koramangala PO - 560034", "Koramangala 4th Block PO - 560047"),
+                "Indiranagar" to listOf("Indiranagar PO - 560038", "HAL 2nd Stage PO - 560008"),
+                "Jayanagar" to listOf("Jayanagar PO - 560011")
+            ),
+            "Mysuru" to mapOf(
+                "Vidyaranyapuram" to listOf("Vidyaranyapuram PO - 570008"),
+                "Gokulam" to listOf("Gokulam PO - 570002")
+            )
+        ),
+        "Kerala" to mapOf(
+            "Thiruvananthapuram" to mapOf(
+                "Museum PS" to listOf("Thiruvananthapuram GPO - 695001"),
+                "Pattom PS" to listOf("Pattom PO - 695004")
+            ),
+            "Ernakulam" to mapOf(
+                "Kochi Fort PS" to listOf("Kochi PO - 682001"),
+                "Aluva PS" to listOf("Aluva PO - 683101")
+            )
+        ),
+        "Madhya Pradesh" to mapOf(
+            "Bhopal" to mapOf(
+                "Arera Colony" to listOf("Arera Hills PO - 462011"),
+                "TT Nagar" to listOf("Bhopal GPO - 462001")
+            ),
+            "Indore" to mapOf(
+                "Vijay Nagar" to listOf("Vijay Nagar PO - 452010"),
+                "Palasia" to listOf("Indore GPO - 452001")
+            )
+        ),
+        "Maharashtra" to mapOf(
+            "Mumbai" to mapOf(
+                "Colaba" to listOf("Colaba PO - 400005", "Nariman Point PO - 400021"),
+                "Bandra" to listOf("Bandra West PO - 400050", "Bandra East PO - 400051")
+            ),
+            "Pune" to mapOf(
+                "Shivajinagar" to listOf("Shivajinagar PO - 411005", "Deccan Gymkhana PO - 411004"),
+                "Kothrud" to listOf("Kothrud PO - 411038", "Kothrud Depot PO - 411029")
+            )
+        ),
+        "Manipur" to mapOf(
+            "Imphal West" to mapOf(
+                "Imphal PS" to listOf("Imphal HO - 795001"),
+                "Lamphel PS" to listOf("Lamphelpat PO - 795004")
+            )
+        ),
+        "Meghalaya" to mapOf(
+            "East Khasi Hills" to mapOf(
+                "Sadar PS" to listOf("Shillong GPO - 793001"),
+                "Laitumkhrah PS" to listOf("Laitumkhrah PO - 793003")
+            )
+        ),
+        "Mizoram" to mapOf(
+            "Aizawl" to mapOf(
+                "Aizawl PS" to listOf("Aizawl PO - 796001")
+            )
+        ),
+        "Nagaland" to mapOf(
+            "Kohima" to mapOf(
+                "North PS" to listOf("Kohima PO - 797001")
+            )
+        ),
+        "Odisha" to mapOf(
+            "Khurda" to mapOf(
+                "Kharavela Nagar" to listOf("Bhubaneswar GPO - 751001"),
+                "Nayapalli" to listOf("Nayapalli PO - 751012")
+            )
+        ),
+        "Punjab" to mapOf(
+            "Amritsar" to mapOf(
+                "Civil Lines" to listOf("Amritsar GPO - 143001"),
+                "Golden Temple PS" to listOf("Golden Temple PO - 143006")
+            ),
+            "Ludhiana" to mapOf(
+                "Sarabha Nagar" to listOf("Sarabha Nagar PO - 141001")
+            )
+        ),
+        "Rajasthan" to mapOf(
+            "Jaipur" to mapOf(
+                "C-Scheme" to listOf("Jaipur GPO - 302001"),
+                "Malviya Nagar" to listOf("Malviya Nagar PO - 302017")
+            ),
+            "Jodhpur" to mapOf(
+                "Sardarpura" to listOf("Jodhpur PO - 342001")
+            )
+        ),
+        "Sikkim" to mapOf(
+            "East Sikkim" to mapOf(
+                "Gangtok PS" to listOf("Gangtok PO - 737101")
+            )
+        ),
+        "Tamil Nadu" to mapOf(
+            "Chennai" to mapOf(
+                "Mylapore" to listOf("Mylapore PO - 600004", "Luz PO - 600004"),
+                "T. Nagar" to listOf("T. Nagar PO - 600017", "Thyagarayanagar PO - 600017")
+            ),
+            "Coimbatore" to mapOf(
+                "RS Puram" to listOf("RS Puram PO - 641002"),
+                "Gandhipuram" to listOf("Gandhipuram PO - 641012")
+            )
+        ),
+        "Telangana" to mapOf(
+            "Hyderabad" to mapOf(
+                "Banjara Hills" to listOf("Khairatabad PO - 500004"),
+                "Gachibowli" to listOf("Gachibowli PO - 500032")
+            )
+        ),
+        "Tripura" to mapOf(
+            "West Tripura" to mapOf(
+                "West PS" to listOf("Agartala HO - 799001")
+            )
+        ),
+        "Uttar Pradesh" to mapOf(
+            "Lucknow" to mapOf(
+                "Hazratganj" to listOf("Lucknow GPO - 226001"),
+                "Aliganj" to listOf("Aliganj PO - 226024")
+            ),
+            "Noida" to mapOf(
+                "Sector 20" to listOf("Noida PO - 201301"),
+                "Sector 58" to listOf("Noida Sector 62 PO - 201309")
+            )
+        ),
+        "Uttarakhand" to mapOf(
+            "Dehradun" to mapOf(
+                "Dalanwala" to listOf("Dehradun GPO - 248001"),
+                "Rajpur" to listOf("Rajpur PO - 248009")
+            )
+        ),
+        "West Bengal" to mapOf(
+            "Kolkata" to mapOf(
+                "Park Street PS" to listOf("Park Street PO - 700016", "Middleton Row PO - 700071"),
+                "Bowbazar PS" to listOf("Bowbazar PO - 700012", "Lalbazar PO - 700001"),
+                "Gariahat PS" to listOf("Gariahat PO - 700019"),
+                "Alipore PS" to listOf("Alipore PO - 700027")
+            ),
+            "Howrah" to mapOf(
+                "Howrah PS" to listOf("Howrah PO - 711101"),
+                "Shibpur PS" to listOf("Shibpur PO - 711102"),
+                "Bally PS" to listOf("Bally PO - 711201")
+            ),
+            "Hooghly" to mapOf(
+                "Chinsurah PS" to listOf("Chinsurah PO - 712101"),
+                "Serampore PS" to listOf("Serampore PO - 712201"),
+                "Chandannagar PS" to listOf("Chandannagar PO - 712136")
+            ),
+            "Nadia" to mapOf(
+                "Krishnanagar PS" to listOf("Krishnanagar PO - 741101"),
+                "Kalyani PS" to listOf("Kalyani PO - 741235"),
+                "Ranaghat PS" to listOf("Ranaghat PO - 741201")
+            ),
+            "Murshidabad" to mapOf(
+                "Baharampur PS" to listOf("Baharampur PO - 742101"),
+                "Lalgola PS" to listOf("Lalgola PO - 742148"),
+                "Jiaganj PS" to listOf("Jiaganj PO - 742123")
+            ),
+            "Malda" to mapOf(
+                "English Bazar PS" to listOf("Malda PO - 732101"),
+                "Kaliachak PS" to listOf("Kaliachak PO - 732201")
+            ),
+            "Dakshin Dinajpur" to mapOf(
+                "Balurghat PS" to listOf("Balurghat PO - 733101"),
+                "Gangarampur PS" to listOf("Gangarampur PO - 733124")
+            ),
+            "Uttar Dinajpur" to mapOf(
+                "Raiganj PS" to listOf("Raiganj PO - 733134"),
+                "Islampur PS" to listOf("Islampur PO - 733202")
+            ),
+            "Darjeeling" to mapOf(
+                "Darjeeling Sadar PS" to listOf("Darjeeling PO - 734101"),
+                "Siliguri PS" to listOf("Siliguri PO - 734001"),
+                "Kurseong PS" to listOf("Kurseong PO - 734203")
+            ),
+            "Jalpaiguri" to mapOf(
+                "Jalpaiguri Kotwali PS" to listOf("Jalpaiguri PO - 735101"),
+                "Malbazar PS" to listOf("Malbazar PO - 735221")
+            ),
+            "Cooch Behar" to mapOf(
+                "Kotwali PS" to listOf("Cooch Behar PO - 736101"),
+                "Dinhata PS" to listOf("Dinhata PO - 736135")
+            ),
+            "Purba Bardhaman" to mapOf(
+                "Bardhaman PS" to listOf("Bardhaman PO - 713101"),
+                "Kalna PS" to listOf("Kalna PO - 713409"),
+                "Katwa PS" to listOf("Katwa PO - 713130")
+            ),
+            "Paschim Bardhaman" to mapOf(
+                "Asansol South PS" to listOf("Asansol PO - 713301"),
+                "Durgapur PS" to listOf("Durgapur PO - 713216")
+            ),
+            "Purba Medinipur" to mapOf(
+                "Tamluk PS" to listOf("Tamluk PO - 721636"),
+                "Haldia PS" to listOf("Haldia PO - 721602"),
+                "Contai PS" to listOf("Contai PO - 721401")
+            ),
+            "Paschim Medinipur" to mapOf(
+                "Midnapore PS" to listOf("Midnapore PO - 721101"),
+                "Kharagpur Town PS" to listOf("Kharagpur PO - 721301"),
+                "Ghatal PS" to listOf("Ghatal PO - 721212")
+            ),
+            "Jhargram" to mapOf(
+                "Jhargram PS" to listOf("Jhargram PO - 721507"),
+                "Gopiballavpur PS" to listOf("Gopiballavpur PO - 721506")
+            ),
+            "Bankura" to mapOf(
+                "Bankura Sadar PS" to listOf("Bankura PO - 722101"),
+                "Bishnupur PS" to listOf("Bishnupur PO - 722122")
+            ),
+            "Purulia" to mapOf(
+                "Purulia Town PS" to listOf("Purulia PO - 723101"),
+                "Raghunathpur PS" to listOf("Raghunathpur PO - 723133")
+            ),
+            "Birbhum" to mapOf(
+                "Suri PS" to listOf("Suri PO - 731101"),
+                "Bolpur PS" to listOf("Bolpur PO - 731204"),
+                "Rampurhat PS" to listOf("Rampurhat PO - 731224")
+            ),
+            "Alipurduar" to mapOf(
+                "Alipurduar PS" to listOf("Alipurduar PO - 736121"),
+                "Falakata PS" to listOf("Falakata PO - 735211")
+            ),
+            "Kalimpong" to mapOf(
+                "Kalimpong PS" to listOf("Kalimpong PO - 734301")
+            ),
+            "South 24 Parganas" to mapOf(
+                "Baruipur PS" to listOf("Baruipur PO - 700144"),
+                "Sonarpur PS" to listOf("Sonarpur PO - 700150"),
+                "Diamond Harbour PS" to listOf("Diamond Harbour PO - 743331")
+            ),
+            "North 24 Parganas" to mapOf(
+                "Salt Lake PS" to listOf("Salt Lake PO - 700064", "Sech Bhawan PO - 700091"),
+                "Barasat PS" to listOf("Barasat PO - 700124", "Hridaypur PO - 700127"),
+                "Barrackpore PS" to listOf("Barrackpore PO - 700120"),
+                "Habra PS" to listOf("Habra PO - 743263")
+            )
+        ),
+        "Andaman and Nicobar Islands" to mapOf(
+            "South Andaman" to mapOf(
+                "Aberdeen PS" to listOf("Port Blair PO - 744101")
+            )
+        ),
+        "Chandigarh" to mapOf(
+            "Chandigarh" to mapOf(
+                "Sector 17 PS" to listOf("Chandigarh GPO - 160017"),
+                "Sector 34 PS" to listOf("Sector 34 PO - 160022")
+            )
+        ),
+        "Dadra and Nagar Haveli and Daman and Diu" to mapOf(
+            "Daman" to mapOf(
+                "Daman PS" to listOf("Daman PO - 396210")
+            )
+        ),
+        "Delhi" to mapOf(
+            "New Delhi" to mapOf(
+                "Connaught Place" to listOf("Connaught Place PO - 110001", "Barakhamba Road PO - 110001"),
+                "Chanakyapuri" to listOf("Chanakyapuri PO - 110021", "Diplomatic Enclave PO - 110021")
+            ),
+            "South Delhi" to mapOf(
+                "Saket" to listOf("Saket PO - 110017", "Malviya Nagar PO - 110017"),
+                "Hauz Khas" to listOf("Hauz Khas PO - 110016", "Green Park PO - 110016")
+            )
+        ),
+        "Jammu and Kashmir" to mapOf(
+            "Srinagar" to mapOf(
+                "Kothibagh PS" to listOf("Srinagar GPO - 190001")
+            ),
+            "Jammu" to mapOf(
+                "Gandhi Nagar PS" to listOf("Gandhi Nagar PO - 180004")
+            )
+        ),
+        "Ladakh" to mapOf(
+            "Leh" to mapOf(
+                "Leh PS" to listOf("Leh PO - 194101")
+            )
+        ),
+        "Lakshadweep" to mapOf(
+            "Kavaratti" to mapOf(
+                "Kavaratti PS" to listOf("Kavaratti PO - 682555")
+            )
+        ),
+        "Puducherry" to mapOf(
+            "Puducherry" to mapOf(
+                "Odiansalai PS" to listOf("Puducherry HO - 605001")
+            )
+        )
+    )
+
     var pharmacyName by remember { mutableStateOf("") }
     var ownerName by remember { mutableStateOf("") }
     var licenseNo by remember { mutableStateOf("") }
     var mobile by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var address by remember { mutableStateOf("") }
+    
+    // Cascading Address dropdown states
+    var selectedState by remember { mutableStateOf("") }
+    var selectedDistrict by remember { mutableStateOf("") }
+    var selectedPoliceStation by remember { mutableStateOf("") }
+    var selectedPostOffice by remember { mutableStateOf("") }
+    var detailedAddress by remember { mutableStateOf("") }
+    var landmark by remember { mutableStateOf("") }
+
     var licenseImage by remember { mutableStateOf("") }
     var pharmacyPhoto by remember { mutableStateOf<String?>(null) }
     
-    // Step Tracking: 1 = Form Entry, 2 = Review & Verify, 3 = Razorpay Payment Screen
+    // Step Tracking: 1 = Pharmacy Info, 2 = Contact, 3 = Address, 4 = Documents, 5 = Review & Payment
     var dialogStep by remember { mutableStateOf(1) }
     var selectedPaymentMethod by remember { mutableStateOf("upi") }
     var isPaying by remember { mutableStateOf(false) }
+    var showRazorpayCheckout by remember { mutableStateOf(false) }
+    var checkoutOrderId by remember { mutableStateOf("") }
     
     var isSubmitting by remember { mutableStateOf(false) }
     var successMessage by remember { mutableStateOf<String?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-
+    
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -761,11 +1314,6 @@ fun PharmacyRegistrationDialog(
         }
     }
 
-    val darkBackground = Color(0xFF0B1220)
-    val cardBackground = Color(0xFF161F30)
-    val accentGreen = Color(0xFF22C55E)
-    val primaryBlue = Color(0xFF3B82F6)
-
     AlertDialog(
         onDismissRequest = { if (!isSubmitting && !isPaying && successMessage == null) onDismiss() },
         modifier = Modifier
@@ -776,14 +1324,14 @@ fun PharmacyRegistrationDialog(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.92f)
+                .fillMaxHeight(0.95f)
                 .clip(RoundedCornerShape(24.dp)),
-            color = darkBackground,
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+            color = dialogBgColor,
+            border = BorderStroke(1.dp, borderLineColor)
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 if (successMessage != null) {
-                    // Success View
+                    // Success View with Premium Animation Elements
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -793,51 +1341,74 @@ fun PharmacyRegistrationDialog(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(72.dp)
+                                .size(100.dp)
                                 .clip(CircleShape)
-                                .background(accentGreen.copy(alpha = 0.2f)),
+                                .background(accentGreen.copy(alpha = 0.15f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
-                                contentDescription = null,
+                                contentDescription = "Success",
                                 tint = accentGreen,
-                                modifier = Modifier.size(48.dp)
-                            )
+                                modifier = Modifier.size(64.dp)
+                              )
                         }
                         
-                        Spacer(modifier = Modifier.height(24.dp))
+                        Spacer(modifier = Modifier.height(28.dp))
                         
                         Text(
-                            text = "Registration Submitted",
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
+                            text = "Registration Successful!",
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Black,
+                            color = textPrimary,
                             textAlign = TextAlign.Center
                         )
                         
                         Spacer(modifier = Modifier.height(16.dp))
-                        
-                        Text(
-                            text = successMessage!!,
-                            fontSize = 15.sp,
-                            color = Color(0xFF94A3B8),
-                            textAlign = TextAlign.Center,
-                            lineHeight = 22.sp,
-                            modifier = Modifier.padding(horizontal = 12.dp)
-                        )
+
+                        // Glasscard Credentials Summary
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = cardBgColor),
+                            border = BorderStroke(1.dp, borderLineColor)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(Icons.Rounded.Security, contentDescription = null, tint = brandPurple, modifier = Modifier.size(16.dp))
+                                    Text("CREDENTIALS SUMMARY", fontSize = 11.sp, color = brandPurple, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                                }
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = successMessage!!,
+                                    fontSize = 14.sp,
+                                    color = textSecondary,
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = 22.sp
+                                )
+                            }
+                        }
                         
                         Spacer(modifier = Modifier.height(32.dp))
                         
                         Button(
                             onClick = onDismiss,
-                            colors = ButtonDefaults.buttonColors(containerColor = primaryBlue),
-                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = brandPurple),
+                            shape = RoundedCornerShape(14.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(50.dp)
+                                .height(54.dp)
+                                .shadow(4.dp, shape = RoundedCornerShape(14.dp))
                         ) {
-                            Text("Back to Login", fontWeight = FontWeight.Bold, color = Color.White)
+                            Text("Proceed to Login Console", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 16.sp)
                         }
                     }
                 } else {
@@ -849,51 +1420,59 @@ fun PharmacyRegistrationDialog(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(cardBackground)
-                                .padding(horizontal = 20.dp, vertical = 16.dp),
+                                .background(cardBgColor)
+                                .padding(horizontal = 20.dp, vertical = 18.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Column {
-                                Text(
-                                    text = when (dialogStep) {
-                                        1 -> "Register New Pharmacy"
-                                        2 -> "Review & Verify"
-                                        else -> "Secure Activation Payment"
-                                    },
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                                    contentDescription = "DoctorLine Logo",
+                                    modifier = Modifier.size(40.dp)
                                 )
-                                Text(
-                                    text = "DoctorLine Care Console",
-                                    fontSize = 12.sp,
-                                    color = Color(0xFF94A3B8)
-                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Column {
+                                    Text(
+                                        text = "Pharmacy Registration",
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = textPrimary
+                                    )
+                                    Text(
+                                        text = "SaaS Console Portal Onboarding",
+                                        fontSize = 11.sp,
+                                        color = textSecondary,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
                             }
                             IconButton(
                                 onClick = onDismiss,
                                 modifier = Modifier
                                     .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.1f))
+                                    .background(if (isDark) Color(0xFF334155) else Color(0xFFF1F5F9))
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = "Close",
-                                    tint = Color.White
+                                    tint = textPrimary
                                 )
                             }
                         }
 
+                        // Premium Step Indicators
+                        SaaSOnboardingHeader(currentStep = dialogStep, totalSteps = 5, isDark = isDark)
+
                         // Error Banner if exists
                         if (errorMessage != null) {
                             Card(
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFFEF4444).copy(alpha = 0.15f)),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.4f)),
+                                colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF3F1A1A) else Color(0xFFFEF2F2)),
+                                border = BorderStroke(1.dp, if (isDark) Color(0xFFEF4444) else Color(0xFFFCA5A5)),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 20.dp, vertical = 10.dp)
+                                    .padding(horizontal = 20.dp, vertical = 8.dp)
                             ) {
                                 Row(
                                     modifier = Modifier.padding(14.dp),
@@ -902,482 +1481,891 @@ fun PharmacyRegistrationDialog(
                                     Icon(
                                         imageVector = Icons.Default.Error,
                                         contentDescription = null,
-                                        tint = Color(0xFFF87171),
+                                        tint = Color(0xFFEF4444),
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Text(
                                         text = errorMessage!!,
-                                        color = Color(0xFFFCA5A5),
-                                        fontSize = 13.sp
+                                        color = if (isDark) Color(0xFFFCA5A5) else Color(0xFF991B1B),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium
                                     )
                                 }
                             }
                         }
 
-                        if (dialogStep == 1) {
-                            // Form Scrollable body
-                            Column(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .verticalScroll(rememberScrollState())
-                                    .padding(20.dp),
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                // Input fields
-                                OutlinedTextField(
-                                    value = pharmacyName,
-                                    onValueChange = { pharmacyName = it },
-                                    label = { Text("Pharmacy Name *", color = Color(0xFF94A3B8)) },
-                                    placeholder = { Text("e.g. Apollo Lifeline Pharmacy", color = Color(0xFF64748B)) },
-                                    leadingIcon = { Icon(Icons.Default.Store, contentDescription = null, tint = primaryBlue) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedTextColor = Color.White,
-                                        unfocusedTextColor = Color.White,
-                                        focusedBorderColor = primaryBlue,
-                                        unfocusedBorderColor = Color(0xFF334155)
+                        // Scrollable Body for individual steps
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState())
+                                .padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            when (dialogStep) {
+                                1 -> {
+                                    // Step 1: Pharmacy Information
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                                    ) {
+                                        Icon(Icons.Rounded.Storefront, contentDescription = null, tint = brandPurple, modifier = Modifier.size(24.dp))
+                                        Text("Pharmacy Details", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = textPrimary)
+                                    }
+                                    
+                                    OutlinedTextField(
+                                        value = pharmacyName,
+                                        onValueChange = { pharmacyName = it },
+                                        label = { Text("Pharmacy Name *") },
+                                        placeholder = { Text("e.g. Apollo Lifeline Pharmacy") },
+                                        leadingIcon = { Icon(Icons.Default.Store, contentDescription = null, tint = brandPurple) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(14.dp),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedTextColor = textPrimary,
+                                            unfocusedTextColor = textPrimary,
+                                            focusedBorderColor = brandPurple,
+                                            unfocusedBorderColor = if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1),
+                                            focusedContainerColor = cardBgColor,
+                                            unfocusedContainerColor = cardBgColor,
+                                            focusedLabelColor = brandPurple,
+                                            unfocusedLabelColor = textSecondary,
+                                            focusedPlaceholderColor = textSecondary.copy(alpha = 0.8f),
+                                            unfocusedPlaceholderColor = textSecondary.copy(alpha = 0.6f)
+                                        )
                                     )
-                                )
-
-                                OutlinedTextField(
-                                    value = ownerName,
-                                    onValueChange = { ownerName = it },
-                                    label = { Text("Owner Full Name *", color = Color(0xFF94A3B8)) },
-                                    placeholder = { Text("e.g. Dr. Amit Patra", color = Color(0xFF64748B)) },
-                                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = primaryBlue) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedTextColor = Color.White,
-                                        unfocusedTextColor = Color.White,
-                                        focusedBorderColor = primaryBlue,
-                                        unfocusedBorderColor = Color(0xFF334155)
+ 
+                                    OutlinedTextField(
+                                        value = ownerName,
+                                        onValueChange = { ownerName = it },
+                                        label = { Text("Owner Full Name *") },
+                                        placeholder = { Text("e.g. Dr. Amit Patra") },
+                                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = brandPurple) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(14.dp),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedTextColor = textPrimary,
+                                            unfocusedTextColor = textPrimary,
+                                            focusedBorderColor = brandPurple,
+                                            unfocusedBorderColor = if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1),
+                                            focusedContainerColor = cardBgColor,
+                                            unfocusedContainerColor = cardBgColor,
+                                            focusedLabelColor = brandPurple,
+                                            unfocusedLabelColor = textSecondary,
+                                            focusedPlaceholderColor = textSecondary.copy(alpha = 0.8f),
+                                            unfocusedPlaceholderColor = textSecondary.copy(alpha = 0.6f)
+                                        )
                                     )
-                                )
-
-                                OutlinedTextField(
-                                    value = licenseNo,
-                                    onValueChange = { licenseNo = it },
-                                    label = { Text("Drug License Number *", color = Color(0xFF94A3B8)) },
-                                    placeholder = { Text("e.g. DL-9087-A/2026", color = Color(0xFF64748B)) },
-                                    leadingIcon = { Icon(Icons.Default.Badge, contentDescription = null, tint = primaryBlue) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedTextColor = Color.White,
-                                        unfocusedTextColor = Color.White,
-                                        focusedBorderColor = primaryBlue,
-                                        unfocusedBorderColor = Color(0xFF334155)
+ 
+                                    OutlinedTextField(
+                                        value = licenseNo,
+                                        onValueChange = { licenseNo = it },
+                                        label = { Text("Drug License Number *") },
+                                        placeholder = { Text("e.g. DL-9087-A/2026") },
+                                        leadingIcon = { Icon(Icons.Default.Badge, contentDescription = null, tint = brandPurple) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(14.dp),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedTextColor = textPrimary,
+                                            unfocusedTextColor = textPrimary,
+                                            focusedBorderColor = brandPurple,
+                                            unfocusedBorderColor = if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1),
+                                            focusedContainerColor = cardBgColor,
+                                            unfocusedContainerColor = cardBgColor,
+                                            focusedLabelColor = brandPurple,
+                                            unfocusedLabelColor = textSecondary,
+                                            focusedPlaceholderColor = textSecondary.copy(alpha = 0.8f),
+                                            unfocusedPlaceholderColor = textSecondary.copy(alpha = 0.6f)
+                                        )
                                     )
-                                )
+                                }
+                                2 -> {
+                                    // Step 2: Contact Information
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                                    ) {
+                                        Icon(Icons.Rounded.ContactMail, contentDescription = null, tint = brandPurple, modifier = Modifier.size(24.dp))
+                                        Text("Contact & Security", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = textPrimary)
+                                    }
+ 
+                                    OutlinedTextField(
+                                        value = mobile,
+                                        onValueChange = { mobile = it },
+                                        label = { Text("Mobile Number *") },
+                                        placeholder = { Text("e.g. +91 98765 43210") },
+                                        leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = brandPurple) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(14.dp),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedTextColor = textPrimary,
+                                            unfocusedTextColor = textPrimary,
+                                            focusedBorderColor = brandPurple,
+                                            unfocusedBorderColor = if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1),
+                                            focusedContainerColor = cardBgColor,
+                                            unfocusedContainerColor = cardBgColor,
+                                            focusedLabelColor = brandPurple,
+                                            unfocusedLabelColor = textSecondary,
+                                            focusedPlaceholderColor = textSecondary.copy(alpha = 0.8f),
+                                            unfocusedPlaceholderColor = textSecondary.copy(alpha = 0.6f)
+                                        ),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
+                                    )
+ 
+                                    OutlinedTextField(
+                                        value = email,
+                                        onValueChange = { email = it },
+                                        label = { Text("Email Address *") },
+                                        placeholder = { Text("e.g. contact@apollomed.com") },
+                                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = brandPurple) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(14.dp),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedTextColor = textPrimary,
+                                            unfocusedTextColor = textPrimary,
+                                            focusedBorderColor = brandPurple,
+                                            unfocusedBorderColor = if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1),
+                                            focusedContainerColor = cardBgColor,
+                                            unfocusedContainerColor = cardBgColor,
+                                            focusedLabelColor = brandPurple,
+                                            unfocusedLabelColor = textSecondary,
+                                            focusedPlaceholderColor = textSecondary.copy(alpha = 0.8f),
+                                            unfocusedPlaceholderColor = textSecondary.copy(alpha = 0.6f)
+                                        ),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+                                    )
+ 
+                                    OutlinedTextField(
+                                        value = password,
+                                        onValueChange = { password = it },
+                                        label = { Text("Password * (Min 6 chars)") },
+                                        placeholder = { Text("Enter a secure password") },
+                                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = brandPurple) },
+                                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(14.dp),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedTextColor = textPrimary,
+                                            unfocusedTextColor = textPrimary,
+                                            focusedBorderColor = brandPurple,
+                                            unfocusedBorderColor = if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1),
+                                            focusedContainerColor = cardBgColor,
+                                            unfocusedContainerColor = cardBgColor,
+                                            focusedLabelColor = brandPurple,
+                                            unfocusedLabelColor = textSecondary,
+                                            focusedPlaceholderColor = textSecondary.copy(alpha = 0.8f),
+                                            unfocusedPlaceholderColor = textSecondary.copy(alpha = 0.6f)
+                                        ),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                                    )
+                                }
+                                3 -> {
+                                    // Step 3: Address Information (Cascading Dropdowns with robust offline data)
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                                    ) {
+                                        Icon(Icons.Rounded.Map, contentDescription = null, tint = brandPurple, modifier = Modifier.size(24.dp))
+                                        Text("Business Address Details", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = textPrimary)
+                                    }
 
-                                OutlinedTextField(
-                                    value = mobile,
-                                    onValueChange = { mobile = it },
-                                    label = { Text("Mobile Number *", color = Color(0xFF94A3B8)) },
-                                    placeholder = { Text("e.g. +91 98765 43210", color = Color(0xFF64748B)) },
-                                    leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = primaryBlue) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedTextColor = Color.White,
-                                        unfocusedTextColor = Color.White,
-                                        focusedBorderColor = primaryBlue,
-                                        unfocusedBorderColor = Color(0xFF334155)
-                                    ),
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
-                                )
+                                    // State Dropdown
+                                    PremiumDropdown(
+                                        label = "State *",
+                                        selectedValue = selectedState,
+                                        options = indiaStatesData.keys.toList(),
+                                        onSelect = {
+                                            selectedState = it
+                                            selectedDistrict = ""
+                                            selectedPoliceStation = ""
+                                            selectedPostOffice = ""
+                                        },
+                                        isDark = isDark
+                                    )
 
-                                OutlinedTextField(
-                                    value = email,
-                                    onValueChange = { email = it },
-                                    label = { Text("Email Address *", color = Color(0xFF94A3B8)) },
-                                    placeholder = { Text("e.g. contact@apollomed.com", color = Color(0xFF64748B)) },
-                                    leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = primaryBlue) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedTextColor = Color.White,
-                                        unfocusedTextColor = Color.White,
-                                        focusedBorderColor = primaryBlue,
-                                        unfocusedBorderColor = Color(0xFF334155)
-                                    ),
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
-                                )
+                                    // District Dropdown
+                                    val districts = if (selectedState.isNotBlank()) {
+                                        indiaStatesData[selectedState]?.keys?.toList() ?: emptyList()
+                                    } else emptyList()
+                                    
+                                    PremiumDropdown(
+                                        label = "District *",
+                                        selectedValue = selectedDistrict,
+                                        options = districts,
+                                        onSelect = {
+                                            selectedDistrict = it
+                                            selectedPoliceStation = ""
+                                            selectedPostOffice = ""
+                                        },
+                                        enabled = selectedState.isNotBlank(),
+                                        isDark = isDark
+                                    )
 
-                                OutlinedTextField(
-                                    value = password,
-                                    onValueChange = { password = it },
-                                    label = { Text("Password * (Min 6 chars)", color = Color(0xFF94A3B8)) },
-                                    placeholder = { Text("Enter a secure password", color = Color(0xFF64748B)) },
-                                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = primaryBlue) },
-                                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedTextColor = Color.White,
-                                        unfocusedTextColor = Color.White,
-                                        focusedBorderColor = primaryBlue,
-                                        unfocusedBorderColor = Color(0xFF334155)
-                                    ),
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
-                                )
+                                    // Police Station Dropdown
+                                    val policeStations = if (selectedState.isNotBlank() && selectedDistrict.isNotBlank()) {
+                                        indiaStatesData[selectedState]?.get(selectedDistrict)?.keys?.toList() ?: emptyList()
+                                    } else emptyList()
 
-                                OutlinedTextField(
-                                    value = address,
-                                    onValueChange = { address = it },
-                                    label = { Text("Full Business Address *", color = Color(0xFF94A3B8)) },
-                                    placeholder = { Text("Complete street address, city, ZIP", color = Color(0xFF64748B)) },
-                                    leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null, tint = primaryBlue) },
-                                    modifier = Modifier.fillMaxWidth().height(90.dp),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedTextColor = Color.White,
-                                        unfocusedTextColor = Color.White,
-                                        focusedBorderColor = primaryBlue,
-                                        unfocusedBorderColor = Color(0xFF334155)
-                                    ),
-                                    maxLines = 3
-                                )
+                                    PremiumDropdown(
+                                        label = "Police Station *",
+                                        selectedValue = selectedPoliceStation,
+                                        options = policeStations,
+                                        onSelect = {
+                                            selectedPoliceStation = it
+                                            selectedPostOffice = ""
+                                        },
+                                        enabled = selectedDistrict.isNotBlank(),
+                                        isDark = isDark
+                                    )
 
-                                // Upload buttons
-                                Text(
-                                    text = "SUPPORTING CERTIFICATES & IMAGES",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF94A3B8),
-                                    letterSpacing = 1.sp,
-                                    modifier = Modifier.padding(top = 8.dp)
-                                )
+                                    // Post Office Dropdown
+                                    val postOffices = if (selectedState.isNotBlank() && selectedDistrict.isNotBlank() && selectedPoliceStation.isNotBlank()) {
+                                        indiaStatesData[selectedState]?.get(selectedDistrict)?.get(selectedPoliceStation) ?: emptyList()
+                                    } else emptyList()
 
-                                // Drug License Card
-                                UploadCard(
-                                    title = "Drug License Document *",
-                                    subtitle = "Upload PDF/JPEG copy of state license",
-                                    isUploaded = licenseImage.isNotBlank(),
-                                    uploadedName = if (licenseImage.isNotBlank()) "License_Uploaded.jpg" else null,
-                                    accentColor = primaryBlue,
-                                    onClick = { licenseImageLauncher.launch("image/*") }
-                                )
+                                    PremiumDropdown(
+                                        label = "Post Office *",
+                                        selectedValue = selectedPostOffice,
+                                        options = postOffices,
+                                        onSelect = {
+                                            selectedPostOffice = it
+                                        },
+                                        enabled = selectedPoliceStation.isNotBlank(),
+                                        isDark = isDark
+                                    )
 
-                                // Pharmacy Photo Card
-                                UploadCard(
-                                    title = "Pharmacy Storefront Photo (Optional)",
-                                    subtitle = "External clinic/store photo",
-                                    isUploaded = pharmacyPhoto != null,
-                                    uploadedName = if (pharmacyPhoto != null) "Storefront_Photo.jpg" else null,
-                                    accentColor = accentGreen,
-                                    onClick = { pharmacyPhotoLauncher.launch("image/*") }
-                                )
-                                
-                                Spacer(modifier = Modifier.height(10.dp))
+                                    // Manual input: Detailed Address
+                                    OutlinedTextField(
+                                        value = detailedAddress,
+                                        onValueChange = { detailedAddress = it },
+                                        label = { Text("Detailed Address *") },
+                                        placeholder = { Text("e.g. Street Number, Flat/Shop No, Area") },
+                                        leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null, tint = brandPurple) },
+                                        modifier = Modifier.fillMaxWidth().height(90.dp),
+                                        shape = RoundedCornerShape(14.dp),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedTextColor = textPrimary,
+                                            unfocusedTextColor = textPrimary,
+                                            focusedBorderColor = brandPurple,
+                                            unfocusedBorderColor = if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1),
+                                            focusedContainerColor = cardBgColor,
+                                            unfocusedContainerColor = cardBgColor,
+                                            focusedLabelColor = brandPurple,
+                                            unfocusedLabelColor = textSecondary,
+                                            focusedPlaceholderColor = textSecondary.copy(alpha = 0.8f),
+                                            unfocusedPlaceholderColor = textSecondary.copy(alpha = 0.6f)
+                                        ),
+                                        maxLines = 3
+                                    )
+
+                                    // Manual input: Landmark (Optional)
+                                    OutlinedTextField(
+                                        value = landmark,
+                                        onValueChange = { landmark = it },
+                                        label = { Text("Landmark (Optional)") },
+                                        placeholder = { Text("e.g. Near City Mall") },
+                                        leadingIcon = { Icon(Icons.Rounded.Info, contentDescription = null, tint = brandPurple) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(14.dp),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedTextColor = textPrimary,
+                                            unfocusedTextColor = textPrimary,
+                                            focusedBorderColor = brandPurple,
+                                            unfocusedBorderColor = if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1),
+                                            focusedContainerColor = cardBgColor,
+                                            unfocusedContainerColor = cardBgColor,
+                                            focusedLabelColor = brandPurple,
+                                            unfocusedLabelColor = textSecondary,
+                                            focusedPlaceholderColor = textSecondary.copy(alpha = 0.8f),
+                                            unfocusedPlaceholderColor = textSecondary.copy(alpha = 0.6f)
+                                        )
+                                    )
+                                }
+                                4 -> {
+                                    // Step 4: Documents Upload with Upload Preview Cards
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                                    ) {
+                                        Icon(Icons.Rounded.CloudUpload, contentDescription = null, tint = brandPurple, modifier = Modifier.size(24.dp))
+                                        Text("Documents & Verification", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = textPrimary)
+                                    }
+
+                                    // Drug License Card & Preview
+                                    if (licenseImage.isBlank()) {
+                                        UploadCard(
+                                            title = "Drug License Document *",
+                                            subtitle = "Upload PDF/JPEG copy of state license",
+                                            isUploaded = false,
+                                            uploadedName = null,
+                                            accentColor = brandPurple,
+                                            onClick = { licenseImageLauncher.launch("image/*") },
+                                            isDark = isDark
+                                        )
+                                    } else {
+                                        Card(
+                                            shape = RoundedCornerShape(16.dp),
+                                            colors = CardDefaults.cardColors(containerColor = cardBgColor),
+                                            border = BorderStroke(1.dp, borderLineColor),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(14.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(64.dp)
+                                                        .clip(RoundedCornerShape(10.dp))
+                                                        .background(if (isDark) Color(0xFF0F172A) else Color(0xFFF1F5F9)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    val painter = coil.compose.rememberAsyncImagePainter(model = licenseImage)
+                                                    Image(
+                                                        painter = painter,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        contentScale = ContentScale.Crop
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(14.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text("Drug_License_Doc.jpg", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = textPrimary)
+                                                    Text("Verifiable Document ID", fontSize = 11.sp, color = textSecondary)
+                                                }
+                                                IconButton(
+                                                    onClick = { licenseImage = "" },
+                                                    modifier = Modifier
+                                                        .clip(CircleShape)
+                                                        .background(if (isDark) Color(0xFF451A1A) else Color(0xFFFEF2F2))
+                                                ) {
+                                                    Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = Color(0xFFEF4444))
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    // Pharmacy Photo Card & Preview
+                                    if (pharmacyPhoto == null) {
+                                        UploadCard(
+                                            title = "Pharmacy Storefront Photo (Optional)",
+                                            subtitle = "External clinic/store photo",
+                                            isUploaded = false,
+                                            uploadedName = null,
+                                            accentColor = accentGreen,
+                                            onClick = { pharmacyPhotoLauncher.launch("image/*") },
+                                            isDark = isDark
+                                        )
+                                    } else {
+                                        Card(
+                                            shape = RoundedCornerShape(16.dp),
+                                            colors = CardDefaults.cardColors(containerColor = cardBgColor),
+                                            border = BorderStroke(1.dp, borderLineColor),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(14.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(64.dp)
+                                                        .clip(RoundedCornerShape(10.dp))
+                                                        .background(if (isDark) Color(0xFF0F172A) else Color(0xFFF1F5F9)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    val painter = coil.compose.rememberAsyncImagePainter(model = pharmacyPhoto)
+                                                    Image(
+                                                        painter = painter,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        contentScale = ContentScale.Crop
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(14.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text("Storefront_Photo.jpg", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = textPrimary)
+                                                    Text("Pharmacy Business Facade", fontSize = 11.sp, color = textSecondary)
+                                                }
+                                                IconButton(
+                                                    onClick = { pharmacyPhoto = null },
+                                                    modifier = Modifier
+                                                        .clip(CircleShape)
+                                                        .background(if (isDark) Color(0xFF451A1A) else Color(0xFFFEF2F2))
+                                                ) {
+                                                    Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = Color(0xFFEF4444))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                5 -> {
+                                    // Step 5: Review Summary & Secure Payment Card
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                                    ) {
+                                        Icon(Icons.Rounded.AssignmentTurnedIn, contentDescription = null, tint = brandPurple, modifier = Modifier.size(24.dp))
+                                        Text("Review & Complete Payment", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = textPrimary)
+                                    }
+
+                                    // Form Review Cards
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(16.dp),
+                                        colors = CardDefaults.cardColors(containerColor = cardBgColor),
+                                        border = BorderStroke(1.dp, borderLineColor)
+                                    ) {
+                                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Text("ONBOARDING DATA SUMMARY", fontSize = 11.sp, color = brandPurple, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                                            HorizontalDivider(color = borderLineColor, thickness = 1.dp)
+                                            
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                Text("Pharmacy Name", fontSize = 13.sp, color = textSecondary)
+                                                Text(pharmacyName, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = textPrimary)
+                                            }
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                Text("Owner Name", fontSize = 13.sp, color = textSecondary)
+                                                Text(ownerName, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = textPrimary)
+                                            }
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                Text("Mobile Number", fontSize = 13.sp, color = textSecondary)
+                                                Text(mobile, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = textPrimary)
+                                            }
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                Text("Email Address", fontSize = 13.sp, color = textSecondary)
+                                                Text(email, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = textPrimary)
+                                            }
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                Text("State & District", fontSize = 13.sp, color = textSecondary)
+                                                Text("$selectedState, $selectedDistrict", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = textPrimary)
+                                            }
+                                        }
+                                    }
+
+                                    // Checkout Card
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(16.dp),
+                                        colors = CardDefaults.cardColors(containerColor = cardBgColor),
+                                        border = BorderStroke(1.2.dp, brandPurple.copy(alpha = if (isDark) 0.5f else 0.3f))
+                                    ) {
+                                        Column(modifier = Modifier.padding(18.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(26.dp)
+                                                            .clip(RoundedCornerShape(6.dp))
+                                                            .background(Color(0xFF0F52BA)),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text("R", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                                    }
+                                                    Text("Razorpay SECURE", fontWeight = FontWeight.Black, fontSize = 13.sp, color = textPrimary)
+                                                }
+                                                Icon(Icons.Default.Lock, contentDescription = "Secure Connection", tint = accentGreen, modifier = Modifier.size(16.dp))
+                                            }
+
+                                            HorizontalDivider(color = borderLineColor, thickness = 1.dp, modifier = Modifier.padding(vertical = 12.dp))
+
+                                            Text("ONE-TIME CONSOLE SETUP FEE", fontSize = 10.sp, color = textSecondary, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+                                            Text("₹8,000.00", fontSize = 34.sp, fontWeight = FontWeight.Black, color = textPrimary)
+                                            Text("Verification audits and SaaS license activation.", fontSize = 12.sp, color = textSecondary)
+                                        }
+                                    }
+                                }
                             }
+                        }
 
-                            // Bottom Action Bar for Step 1
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(cardBackground)
-                                    .padding(20.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
+                        // Bottom Action bar
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(cardBgColor)
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (dialogStep > 1) {
+                                OutlinedButton(
+                                    onClick = { dialogStep -= 1 },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(52.dp),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = textPrimary,
+                                        containerColor = Color.Transparent
+                                    ),
+                                    border = BorderStroke(1.dp, if (isDark) Color(0xFF475569) else Color(0xFFCBD5E1))
+                                ) {
+                                    Text("Back", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                }
+                            } else {
                                 OutlinedButton(
                                     onClick = onDismiss,
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(50.dp),
-                                    shape = RoundedCornerShape(12.dp),
+                                        .height(52.dp),
+                                    shape = RoundedCornerShape(14.dp),
                                     colors = ButtonDefaults.outlinedButtonColors(
-                                        contentColor = Color.White,
+                                        contentColor = textPrimary,
                                         containerColor = Color.Transparent
                                     ),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155))
+                                    border = BorderStroke(1.dp, if (isDark) Color(0xFF475569) else Color(0xFFCBD5E1))
                                 ) {
-                                    Text("Cancel", fontWeight = FontWeight.Bold)
-                                }
-
-                                Button(
-                                    onClick = {
-                                        if (pharmacyName.isBlank() || ownerName.isBlank() || licenseNo.isBlank() ||
-                                            mobile.isBlank() || email.isBlank() || password.isBlank() || address.isBlank()
-                                        ) {
-                                            errorMessage = "All fields marked with * are strictly required."
-                                            return@Button
-                                        }
-                                        if (password.length < 6) {
-                                            errorMessage = "Password must be at least 6 characters."
-                                            return@Button
-                                        }
-                                        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
-                                            errorMessage = "Please enter a valid email address."
-                                            return@Button
-                                        }
-                                        if (licenseImage.isBlank()) {
-                                            errorMessage = "Please upload a copy of your Drug License Image."
-                                            return@Button
-                                        }
-                                        errorMessage = null
-                                        dialogStep = 2 // Transition to step 2 review
-                                    },
-                                    modifier = Modifier
-                                        .weight(1.5f)
-                                        .height(50.dp),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = primaryBlue)
-                                ) {
-                                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.White)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Submit Registration", fontWeight = FontWeight.Bold, color = Color.White)
-                                }
-                            }
-                        } else if (dialogStep == 2) {
-                            // Step 2: Review & Verify Information
-                            Column(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .verticalScroll(rememberScrollState())
-                                    .padding(20.dp),
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                Text(
-                                    text = "Review & Verify Information",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                                Text(
-                                    text = "Please verify your submitted info carefully. Confirmed requests will transition directly to secure platform payment gateway.",
-                                    fontSize = 12.sp,
-                                    color = Color(0xFF94A3B8)
-                                )
-
-                                HorizontalDivider(color = Color.White.copy(alpha = 0.1f), thickness = 1.dp)
-
-                                ReviewItem(label = "Pharmacy Name", value = pharmacyName, icon = Icons.Default.Store)
-                                ReviewItem(label = "Owner Full Name", value = ownerName, icon = Icons.Default.Person)
-                                ReviewItem(label = "Drug License Number", value = licenseNo, icon = Icons.Default.Badge)
-                                ReviewItem(label = "Mobile Number", value = mobile, icon = Icons.Default.Phone)
-                                ReviewItem(label = "Email Address", value = email, icon = Icons.Default.Email)
-                                ReviewItem(label = "Business Address", value = address, icon = Icons.Default.LocationOn)
-
-                                ReviewItem(
-                                    label = "Drug License Document",
-                                    value = "License_Uploaded.jpg",
-                                    icon = Icons.Default.CheckCircle,
-                                    color = accentGreen
-                                )
-
-                                if (pharmacyPhoto != null) {
-                                    ReviewItem(
-                                        label = "Storefront Photo",
-                                        value = "Storefront_Photo.jpg",
-                                        icon = Icons.Default.CheckCircle,
-                                        color = accentGreen
-                                    )
+                                    Text("Cancel", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                                 }
                             }
 
-                            // Bottom Action Bar for Step 2
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(cardBackground)
-                                    .padding(20.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                OutlinedButton(
-                                    onClick = { dialogStep = 1 },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(50.dp),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        contentColor = Color.White,
-                                        containerColor = Color.Transparent
-                                    ),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155))
-                                ) {
-                                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Edit Information", fontWeight = FontWeight.Bold)
-                                }
-
-                                Button(
-                                    onClick = { dialogStep = 3 },
-                                    modifier = Modifier
-                                        .weight(1.3f)
-                                        .height(50.dp),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = accentGreen)
-                                ) {
-                                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.White)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Confirm & Continue", fontWeight = FontWeight.Bold, color = Color.White)
-                                }
-                            }
-                        } else if (dialogStep == 3) {
-                            // Step 3: Razorpay Payment Gateway Checkout Simulation
-                            Column(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .verticalScroll(rememberScrollState())
-                                    .padding(20.dp),
-                                verticalArrangement = Arrangement.spacedBy(18.dp)
-                            ) {
-                                Text(
-                                    text = "Secure Registration Checkout",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(16.dp),
-                                    colors = CardDefaults.cardColors(containerColor = cardBackground),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
-                                ) {
-                                    Column(modifier = Modifier.padding(18.dp)) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(26.dp)
-                                                        .clip(RoundedCornerShape(6.dp))
-                                                        .background(Color(0xFF0F52BA)),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text("R", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                                }
-                                                Text("Razorpay SECURE", fontWeight = FontWeight.Black, fontSize = 13.sp, color = Color.White)
+                            Button(
+                                onClick = {
+                                    errorMessage = null
+                                    when (dialogStep) {
+                                        1 -> {
+                                            if (pharmacyName.isBlank() || ownerName.isBlank() || licenseNo.isBlank()) {
+                                                errorMessage = "Please enter all fields marked with *."
+                                            } else {
+                                                dialogStep = 2
                                             }
-                                            Icon(Icons.Default.Lock, contentDescription = "Secure Connection", tint = accentGreen, modifier = Modifier.size(16.dp))
                                         }
-
-                                        HorizontalDivider(color = Color.White.copy(alpha = 0.1f), thickness = 1.dp, modifier = Modifier.padding(vertical = 12.dp))
-
-                                        Text("ONE-TIME ACTIVATION FEE", fontSize = 10.sp, color = Color(0xFF94A3B8), fontWeight = FontWeight.Bold)
-                                        Text("₹8,000.00", fontSize = 34.sp, fontWeight = FontWeight.Black, color = Color.White)
-                                        Text("Fixed registration and licensing verification fee.", fontSize = 12.sp, color = Color(0xFF64748B))
-
-                                        Spacer(modifier = Modifier.height(16.dp))
-
-                                        Text("CHOOSE PAYMENT INSTRUMENT", fontSize = 10.sp, color = Color(0xFF94A3B8), fontWeight = FontWeight.Bold)
-                                        Spacer(modifier = Modifier.height(8.dp))
-
-                                        PaymentMethodRow(
-                                            title = "UPI / Google Pay / PhonePe",
-                                            subtitle = "Pay instantly via your linked UPI apps",
-                                            selected = selectedPaymentMethod == "upi",
-                                            onClick = { selectedPaymentMethod = "upi" }
-                                        )
-
-                                        PaymentMethodRow(
-                                            title = "Credit or Debit Card",
-                                            subtitle = "Pay securely using Visa, MasterCard, RuPay",
-                                            selected = selectedPaymentMethod == "card",
-                                            onClick = { selectedPaymentMethod = "card" }
-                                        )
-
-                                        PaymentMethodRow(
-                                            title = "Net Banking",
-                                            subtitle = "Support for SBI, ICICI, HDFC, and others",
-                                            selected = selectedPaymentMethod == "netbanking",
-                                            onClick = { selectedPaymentMethod = "netbanking" }
-                                        )
+                                        2 -> {
+                                            if (mobile.isBlank() || email.isBlank() || password.isBlank()) {
+                                                errorMessage = "Please enter all fields marked with *."
+                                            } else if (password.length < 6) {
+                                                errorMessage = "Password must be at least 6 characters."
+                                            } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
+                                                errorMessage = "Please enter a valid email address."
+                                            } else {
+                                                dialogStep = 3
+                                            }
+                                        }
+                                        3 -> {
+                                            if (selectedState.isBlank() || selectedDistrict.isBlank() || 
+                                                selectedPoliceStation.isBlank() || selectedPostOffice.isBlank() ||
+                                                detailedAddress.isBlank()
+                                            ) {
+                                                errorMessage = "Please select State, District, PS, PO, and enter your Detailed Address."
+                                            } else {
+                                                dialogStep = 4
+                                            }
+                                        }
+                                        4 -> {
+                                            if (licenseImage.isBlank()) {
+                                                errorMessage = "Please upload a copy of your Drug License Image."
+                                            } else {
+                                                dialogStep = 5
+                                            }
+                                        }
+                                        5 -> {
+                                            errorMessage = null
+                                            checkoutOrderId = "order_reg_" + java.util.UUID.randomUUID().toString().replace("-", "").take(10)
+                                            showRazorpayCheckout = true
+                                        }
                                     }
-                                }
-                            }
-
-                            // Bottom Action Bar for Step 3
-                            Row(
+                                },
+                                enabled = !isPaying && !isSubmitting,
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(cardBackground)
-                                    .padding(20.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    .weight(1.5f)
+                                    .height(52.dp)
+                                    .shadow(2.dp, shape = RoundedCornerShape(14.dp)),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = brandPurple)
                             ) {
-                                OutlinedButton(
-                                    onClick = { if (!isPaying && !isSubmitting) dialogStep = 2 },
-                                    enabled = !isPaying && !isSubmitting,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(50.dp),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        contentColor = Color.White,
-                                        containerColor = Color.Transparent
-                                    ),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155))
-                                ) {
-                                    Text("Back", fontWeight = FontWeight.Bold)
-                                }
-
-                                Button(
-                                    onClick = {
-                                        isPaying = true
-                                        errorMessage = null
-                                        scope.launch {
-                                            delay(2000) // Authorize payment simulation
-                                            val generatedPayId = "pay_" + java.util.UUID.randomUUID().toString().replace("-", "").take(14)
-                                            isSubmitting = true
-                                            isPaying = false
-                                            viewModel.submitPharmacyRequest(
-                                                pharmacyName = pharmacyName.trim(),
-                                                ownerName = ownerName.trim(),
-                                                licenseNo = licenseNo.trim(),
-                                                mobile = mobile.trim(),
-                                                email = email.trim(),
-                                                passwordPlain = password,
-                                                address = address.trim(),
-                                                licenseImage = licenseImage,
-                                                pharmacyPhoto = pharmacyPhoto,
-                                                paymentId = generatedPayId,
-                                                paymentStatus = "payment_completed",
-                                                paymentAmount = 8000.0,
-                                                paymentDate = System.currentTimeMillis(),
-                                                onComplete = { success, msg ->
-                                                    isSubmitting = false
-                                                    if (success) {
-                                                        successMessage = msg
-                                                    } else {
-                                                        errorMessage = msg
-                                                    }
-                                                }
-                                            )
-                                        }
-                                    },
-                                    enabled = !isPaying && !isSubmitting,
-                                    modifier = Modifier
-                                        .weight(1.5f)
-                                        .height(50.dp),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F52BA))
-                                ) {
-                                    if (isPaying) {
-                                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Authorizing...", fontWeight = FontWeight.Bold, color = Color.White)
-                                    } else if (isSubmitting) {
-                                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Registering...", fontWeight = FontWeight.Bold, color = Color.White)
-                                    } else {
-                                        Icon(Icons.Default.Payment, contentDescription = null, tint = Color.White)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Pay ₹8,000", fontWeight = FontWeight.Bold, color = Color.White)
+                                if (isPaying) {
+                                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Verifying...", fontWeight = FontWeight.Bold)
+                                } else if (isSubmitting) {
+                                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Registering...", fontWeight = FontWeight.Bold)
+                                } else {
+                                    Text(
+                                        text = if (dialogStep == 5) "Pay ₹8,000" else "Next Step",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        color = Color.White
+                                    )
+                                    if (dialogStep < 5) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                                     }
                                 }
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // Interactive Razorpay Checkout Dialog
+    RazorpayCheckoutDialog(
+        visible = showRazorpayCheckout,
+        amount = 8000.0,
+        orderId = checkoutOrderId,
+        email = email.trim().ifBlank { "info@pharmacy.com" },
+        onSuccess = { paymentId, signature, method ->
+            isSubmitting = true
+            showRazorpayCheckout = false
+            
+            val fullAddress = buildString {
+                append(detailedAddress.trim())
+                if (landmark.isNotBlank()) {
+                    append(", Landmark: ").append(landmark.trim())
+                }
+                append(", PO: ").append(selectedPostOffice)
+                append(", PS: ").append(selectedPoliceStation)
+                append(", District: ").append(selectedDistrict)
+                append(", State: ").append(selectedState)
+            }
+
+            // Record and verify the payment locally & submit pharmacy request
+            viewModel.verifyAndCompletePayment(
+                orderId = checkoutOrderId,
+                paymentId = paymentId,
+                signature = signature,
+                pharmacyId = null,
+                type = com.example.data.payment.PaymentType.PHARMACY_REGISTRATION_FEE,
+                amount = 8000.0,
+                paymentMethod = method,
+                failureReason = null,
+                onResult = { result ->
+                    viewModel.submitPharmacyRequest(
+                        pharmacyName = pharmacyName.trim(),
+                        ownerName = ownerName.trim(),
+                        licenseNo = licenseNo.trim(),
+                        mobile = mobile.trim(),
+                        email = email.trim(),
+                        passwordPlain = password,
+                        address = fullAddress,
+                        licenseImage = licenseImage,
+                        pharmacyPhoto = pharmacyPhoto,
+                        paymentId = paymentId,
+                        paymentStatus = "success",
+                        paymentAmount = 8000.0,
+                        paymentDate = System.currentTimeMillis(),
+                        onComplete = { success, msg ->
+                            isSubmitting = false
+                            if (success) {
+                                successMessage = msg
+                            } else {
+                                errorMessage = msg
+                            }
+                        }
+                    )
+                }
+            )
+        },
+        onFailure = { reason ->
+            showRazorpayCheckout = false
+            errorMessage = "Payment Failed: $reason"
+        },
+        onDismiss = {
+            showRazorpayCheckout = false
+            errorMessage = "Payment Cancelled by User"
+        }
+    )
+}
+
+@Composable
+fun SaaSOnboardingHeader(
+    currentStep: Int,
+    totalSteps: Int = 5,
+    isDark: Boolean = false
+) {
+    val steps = listOf(
+        "Pharmacy",
+        "Contact",
+        "Address",
+        "Documents",
+        "Payment"
+    )
+    
+    val icons = listOf(
+        Icons.Rounded.Storefront,
+        Icons.Rounded.ContactMail,
+        Icons.Rounded.Map,
+        Icons.Rounded.CloudUpload,
+        Icons.Rounded.CreditCard
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (isDark) Color(0xFF0F172A) else Color.White)
+            .padding(vertical = 14.dp, horizontal = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Line & Icons Row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            for (i in 1..totalSteps) {
+                val isCompleted = i < currentStep
+                val isActive = i == currentStep
+                
+                val circleBg = when {
+                    isCompleted -> if (isDark) Color(0xFF1B4D3E) else Color(0xFFDCFCE7)
+                    isActive -> if (isDark) Color(0xFF4F46E5) else Color(0xFF6C5DD3)
+                    else -> if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
+                }
+                
+                val iconColor = when {
+                    isCompleted -> if (isDark) Color(0xFF4ADE80) else Color(0xFF15803D)
+                    isActive -> Color.White
+                    else -> if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8)
+                }
+
+                val borderStroke = if (isActive) {
+                    BorderStroke(2.dp, (if (isDark) Color(0xFF818CF8) else Color(0xFF6C5DD3)).copy(alpha = 0.3f))
+                } else null
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(circleBg)
+                            .then(if (borderStroke != null) Modifier.border(borderStroke, CircleShape) else Modifier),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isCompleted) {
+                            Icon(
+                                imageVector = Icons.Rounded.Check,
+                                contentDescription = "Completed",
+                                tint = iconColor,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = icons[i - 1],
+                                contentDescription = steps[i - 1],
+                                tint = iconColor,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    Text(
+                        text = steps[i - 1],
+                        fontSize = 9.sp,
+                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                        color = when {
+                            isCompleted -> if (isDark) Color(0xFF4ADE80) else Color(0xFF15803D)
+                            isActive -> if (isDark) Color(0xFF818CF8) else Color(0xFF6C5DD3)
+                            else -> if (isDark) Color(0xFF64748B) else Color(0xFF64748B)
+                        }
+                    )
+                }
+                
+                if (i < totalSteps) {
+                    val lineColor = if (i < currentStep) Color(0xFF22C55E) else (if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0))
+                    Box(
+                        modifier = Modifier
+                            .height(2.dp)
+                            .weight(0.2f)
+                            .background(lineColor)
+                    )
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(10.dp))
+        
+        val progress = currentStep.toFloat() / totalSteps.toFloat()
+        LinearProgressIndicator(
+            progress = progress,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .clip(RoundedCornerShape(2.dp)),
+            color = if (isDark) Color(0xFF818CF8) else Color(0xFF6C5DD3),
+            trackColor = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+        )
+    }
+}
+
+@Composable
+fun PremiumDropdown(
+    label: String,
+    selectedValue: String,
+    options: List<String>,
+    onSelect: (String) -> Unit,
+    enabled: Boolean = true,
+    isDark: Boolean = false
+) {
+    var expanded by remember { mutableStateOf(false) }
+    
+    Box(modifier = Modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value = selectedValue,
+            onValueChange = {},
+            readOnly = true,
+            enabled = enabled,
+            label = { Text(label, color = if (enabled) (if (isDark) Color(0xFFCBD5E1) else Color(0xFF475569)) else (if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8))) },
+            trailingIcon = {
+                IconButton(onClick = { if (enabled) expanded = !expanded }) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Rounded.ArrowDropUp else Icons.Rounded.ArrowDropDown,
+                        contentDescription = "Dropdown",
+                        tint = if (enabled) (if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)) else (if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1))
+                    )
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { if (enabled) expanded = !expanded },
+            shape = RoundedCornerShape(14.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = if (isDark) Color.White else Color(0xFF0F172A),
+                unfocusedTextColor = if (isDark) Color.White else Color(0xFF0F172A),
+                disabledTextColor = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8),
+                focusedBorderColor = Color(0xFF6C5DD3),
+                unfocusedBorderColor = if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1),
+                disabledBorderColor = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0),
+                focusedContainerColor = if (enabled) (if (isDark) Color(0xFF1E293B) else Color.White) else (if (isDark) Color(0xFF0F172A) else Color(0xFFF1F5F9)),
+                unfocusedContainerColor = if (enabled) (if (isDark) Color(0xFF1E293B) else Color.White) else (if (isDark) Color(0xFF0F172A) else Color(0xFFF1F5F9)),
+                disabledContainerColor = if (isDark) Color(0xFF0F172A) else Color(0xFFF1F5F9)
+            )
+        )
+        
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .background(if (isDark) Color(0xFF1E293B) else Color.White, shape = RoundedCornerShape(14.dp))
+        ) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option, fontSize = 14.sp, color = if (isDark) Color.White else Color(0xFF0F172A)) },
+                    onClick = {
+                        onSelect(option)
+                        expanded = false
+                    }
+                )
             }
         }
     }
@@ -1444,7 +2432,8 @@ fun UploadCard(
     isUploaded: Boolean,
     uploadedName: String?,
     accentColor: Color,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    isDark: Boolean = false
 ) {
     Card(
         modifier = Modifier
@@ -1452,11 +2441,11 @@ fun UploadCard(
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isUploaded) Color(0xFF1E293B) else Color(0xFF161F30)
+            containerColor = if (isUploaded) (if (isDark) Color(0xFF1E293B) else Color(0xFFF8FAFC)) else (if (isDark) Color(0xFF0F172A) else Color(0xFFF1F5F9))
         ),
         border = androidx.compose.foundation.BorderStroke(
             width = 1.dp,
-            color = if (isUploaded) accentColor.copy(alpha = 0.5f) else Color(0xFF334155)
+            color = if (isUploaded) accentColor.copy(alpha = 0.5f) else (if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1))
         )
     ) {
         Row(
@@ -1467,13 +2456,13 @@ fun UploadCard(
                 modifier = Modifier
                     .size(44.dp)
                     .clip(CircleShape)
-                    .background(if (isUploaded) accentColor.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f)),
+                    .background(if (isUploaded) accentColor.copy(alpha = 0.15f) else (if (isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f))),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = if (isUploaded) Icons.Default.CheckCircle else Icons.Default.CloudUpload,
                     contentDescription = null,
-                    tint = if (isUploaded) accentColor else Color(0xFF94A3B8)
+                    tint = if (isUploaded) accentColor else (if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B))
                 )
             }
             Spacer(modifier = Modifier.width(14.dp))
@@ -1482,12 +2471,12 @@ fun UploadCard(
                     text = title,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = if (isDark) Color.White else Color(0xFF0F172A)
                 )
                 Text(
                     text = uploadedName ?: subtitle,
                     fontSize = 12.sp,
-                    color = if (isUploaded) accentColor else Color(0xFF94A3B8)
+                    color = if (isUploaded) accentColor else (if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B))
                 )
             }
             if (isUploaded) {
@@ -1495,7 +2484,7 @@ fun UploadCard(
                     Icon(
                         imageVector = Icons.Default.Edit,
                         contentDescription = "Edit File",
-                        tint = Color(0xFF94A3B8),
+                        tint = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
                         modifier = Modifier.size(18.dp)
                     )
                 }

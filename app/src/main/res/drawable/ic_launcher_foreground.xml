@@ -1,8 +1,148 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:width="66dp"
-        android:height="66dp"
-        android:drawable="@drawable/medical_app_icon_1782119145796"
-        android:gravity="center" />
-</layer-list>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 1. White Medical Chat Bubble (Base) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,20 C71.12,20 85,33.88 85,51 C85,68.12 71.12,82 54,82 C49.2,82 44.7,80.9 40.6,78.9 L25,83 L29.1,67.4 C27.1,63.3 26,58.8 26,51 C26,33.88 39.88,20 54,20 Z" />
+
+    <!-- 2. Doctor's Neck & Skin Underlay -->
+    <path
+        android:fillColor="#FFD2B2"
+        android:pathData="M51,51 H57 V58 H51 Z" />
+
+    <!-- 3. Face and Ears -->
+    <!-- Left Ear -->
+    <path
+        android:fillColor="#FFD2B2"
+        android:pathData="M41.5,45 C40.4,45 39.5,44.1 39.5,43 C39.5,41.9 40.4,41 41.5,41 Z" />
+    <!-- Right Ear -->
+    <path
+        android:fillColor="#FFD2B2"
+        android:pathData="M66.5,45 C67.6,45 68.5,44.1 68.5,43 C68.5,41.9 67.6,41 66.5,41 Z" />
+    <!-- Face -->
+    <path
+        android:fillColor="#FFD2B2"
+        android:pathData="M42,43 C42,51.8 54,55 54,55 C54,55 66,51.8 66,43 C66,35.5 42,35.5 42,43 Z" />
+
+    <!-- 4. Hair (Dark Slate Blue-Black) -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M39,39 C39,29.5 43.5,26.5 54,26.5 C64.5,26.5 69,29.5 69,39 C69,35.5 67,31.5 63,30.5 C59,29.5 49,29.5 45,30.5 C41,31.5 39,35.5 39,39 Z" />
+
+    <!-- 5. V-Neck Blue Shirt Underneath -->
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M49.5,57 L54,63 L58.5,57 Z" />
+
+    <!-- 6. White Coat (Light Silver shading to differentiate from white bubble) -->
+    <path
+        android:fillColor="#F1F5F9"
+        android:strokeColor="#CBD5E1"
+        android:strokeWidth="0.8"
+        android:pathData="M34,74.5 C34,65.5 41.2,57.5 48.5,57.5 L54,62.5 L59.5,57.5 C66.8,57.5 74,65.5 74,74.5 Z" />
+
+    <!-- 7. Coat Lapels (White highlights with fine light borders) -->
+    <!-- Left Lapel -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#CBD5E1"
+        android:strokeWidth="0.8"
+        android:pathData="M48.5,57.5 L54,65 L54,74.5 H45 C45,74.5 45,62 48.5,57.5 Z" />
+    <!-- Right Lapel -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#CBD5E1"
+        android:strokeWidth="0.8"
+        android:pathData="M59.5,57.5 L54,65 L54,74.5 H63 C63,74.5 63,62 59.5,57.5 Z" />
+
+    <!-- 8. Glasses (Thick Rounded Frames + Bridge) -->
+    <!-- Left Frame -->
+    <path
+        android:strokeColor="#334155"
+        android:strokeWidth="1.5"
+        android:pathData="M48,43.5 A3.5,3.5 0 1 1 48,43.49 Z" />
+    <!-- Right Frame -->
+    <path
+        android:strokeColor="#334155"
+        android:strokeWidth="1.5"
+        android:pathData="M60,43.5 A3.5,3.5 0 1 1 60,43.49 Z" />
+    <!-- Bridge & Temples -->
+    <path
+        android:strokeColor="#334155"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:pathData="M51.5,43.5 H56.5 M44.5,43.5 H42.5 M63.5,43.5 H65.5" />
+
+    <!-- 9. Facial Details (Smile, Eyes, Eyebrows) -->
+    <!-- Smile -->
+    <path
+        android:strokeColor="#334155"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:pathData="M51,49.5 Q54,52.5 57,49.5" />
+    <!-- Eyebrows -->
+    <path
+        android:strokeColor="#1E293B"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:pathData="M45.5,38.5 Q48,37 50.5,39.5 M57.5,39.5 Q60,37 62.5,38.5" />
+    <!-- Eyes -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M48,43.5 A0.8,0.8 0 1 1 48,43.49 Z M60,43.5 A0.8,0.8 0 1 1 60,43.49 Z" />
+
+    <!-- 10. Stethoscope (Elegant Dark Gray Tube & Metallic Chestpiece) -->
+    <!-- Stethoscope Tubing around Neck -->
+    <path
+        android:strokeColor="#475569"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M44.5,57.5 C44.5,65.5 48,68 54,68 C60,68 63.5,65.5 63.5,57.5" />
+    <!-- Ear Tubes (Binurals) -->
+    <path
+        android:strokeColor="#475569"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:pathData="M44.5,57.5 V54.5 M63.5,57.5 V54.5" />
+    <!-- Chestpiece Tubing -->
+    <path
+        android:strokeColor="#475569"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M54,68 C56,68 58,67 60,65.5" />
+    <!-- Chestpiece Metallic Diaphragm -->
+    <!-- Outer Ring -->
+    <path
+        android:fillColor="#94A3B8"
+        android:strokeColor="#475569"
+        android:strokeWidth="0.8"
+        android:pathData="M60.5,65 A2.2,2.2 0 1 1 60.5,64.99 Z" />
+    <!-- Inner Core -->
+    <path
+        android:fillColor="#E2E8F0"
+        android:pathData="M60.5,65 A1,1 0 1 1 60.5,64.99 Z" />
+
+    <!-- 11. Red/Blue Medical pocket Cross on coat -->
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M41,64.5 H43 V66.5 H41 Z" />
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M40,65.5 H44 V65.5 H40 Z" />
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M41,63.5 H43 V67.5 H41 Z" />
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M40,64.5 H44 V66.5 H40 Z" />
+    <!-- A solid perfect blue cross -->
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M41.5,63 H42.5 V64 H43.5 V65 H42.5 V66 H41.5 V65 H40.5 V64 H41.5 Z" />
+
+</vector>

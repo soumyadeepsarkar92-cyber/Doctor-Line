@@ -681,15 +681,15 @@ class MainViewModel(application: Application, private val repository: DoctorLine
         }
     }
 
-    fun rejectPharmacyRequest(requestId: String) {
+    fun rejectPharmacyRequest(requestId: String, reason: String) {
         viewModelScope.launch {
-            repository.rejectPharmacyRequest(requestId)
+            repository.rejectPharmacyRequest(requestId, reason)
         }
     }
 
-    fun requestCorrectionPharmacyRequest(requestId: String) {
+    fun requestCorrectionPharmacyRequest(requestId: String, notes: String) {
         viewModelScope.launch {
-            repository.requestCorrectionPharmacyRequest(requestId)
+            repository.requestCorrectionPharmacyRequest(requestId, notes)
         }
     }
 
@@ -731,6 +731,194 @@ class MainViewModel(application: Application, private val repository: DoctorLine
                 yearlySubscriptionFee = yearlyFee
             )
             repository.savePricingSettings(updated)
+        }
+    }
+
+    // --- PAYMENT FOUNDATION (PHASE A) ---
+    val paymentRepository: com.example.data.payment.PaymentRepository by lazy {
+        (getApplication() as com.example.DoctorLineApplication).paymentRepository
+    }
+
+    val razorpayConfig: com.example.data.payment.RazorpayConfig by lazy {
+        com.example.data.payment.RazorpayConfig.fromBuildConfig()
+    }
+
+    val allPaymentHistory: StateFlow<List<com.example.data.payment.PaymentHistoryRecord>> = paymentRepository.allPaymentHistory
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun getPaymentHistoryByPharmacy(pharmacyId: String): Flow<List<com.example.data.payment.PaymentHistoryRecord>> {
+        return paymentRepository.getPaymentHistoryByPharmacy(pharmacyId)
+    }
+
+    fun initiatePharmacyRegistrationFee(
+        pharmacyRequestId: String,
+        amount: Double,
+        email: String,
+        onResult: (com.example.data.payment.PaymentResult<com.example.data.payment.PaymentOrder>) -> Unit
+    ) {
+        viewModelScope.launch {
+            onResult(com.example.data.payment.PaymentResult.Loading)
+            val res = paymentRepository.initiateRegistrationFee(pharmacyRequestId, amount, email)
+            onResult(res)
+        }
+    }
+
+    fun initiateSubscriptionRenewal(
+        pharmacyId: String,
+        amount: Double,
+        onResult: (com.example.data.payment.PaymentResult<com.example.data.payment.PaymentOrder>) -> Unit
+    ) {
+        viewModelScope.launch {
+            onResult(com.example.data.payment.PaymentResult.Loading)
+            val res = paymentRepository.initiateSubscriptionRenewal(pharmacyId, amount)
+            onResult(res)
+        }
+    }
+
+    fun verifyAndCompletePayment(
+        orderId: String,
+        paymentId: String,
+        signature: String,
+        pharmacyId: String?,
+        type: com.example.data.payment.PaymentType,
+        amount: Double,
+        paymentMethod: String = "UPI",
+        failureReason: String? = null,
+        onResult: (com.example.data.payment.PaymentResult<Boolean>) -> Unit
+    ) {
+        viewModelScope.launch {
+            onResult(com.example.data.payment.PaymentResult.Loading)
+            val res = paymentRepository.verifyAndCompletePayment(
+                orderId = orderId,
+                paymentId = paymentId,
+                signature = signature,
+                pharmacyId = pharmacyId,
+                type = type,
+                amount = amount,
+                paymentMethod = paymentMethod,
+                failureReason = failureReason
+            )
+            onResult(res)
+        }
+    }
+
+    fun renewPharmacySubscription(
+        pharmacyId: String,
+        amount: Double,
+        paymentId: String,
+        orderId: String,
+        signature: String,
+        paymentMethod: String,
+        onComplete: (Boolean, String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val pharList = repository.allPharmacies.firstOrNull() ?: emptyList()
+                val phar = pharList.find { it.id == pharmacyId }
+                if (phar == null) {
+                    onComplete(false, "Pharmacy not found.")
+                    return@launch
+                }
+
+                // Calculate next due date / expiry
+                val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+                val calendar = java.util.Calendar.getInstance()
+                
+                val plan = phar.subscriptionPlan.lowercase()
+                if (plan.contains("quarterly")) {
+                    calendar.add(java.util.Calendar.MONTH, 3)
+                } else if (plan.contains("yearly")) {
+                    calendar.add(java.util.Calendar.YEAR, 1)
+                } else {
+                    calendar.add(java.util.Calendar.MONTH, 1) // default monthly
+                }
+                
+                val nextDueDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(calendar.time)
+
+                // Update pharmacy entity
+                val updatedPharmacy = phar.copy(
+                    status = "Active", // unsuspend automatically
+                    subscriptionStart = today,
+                    subscriptionExpiry = nextDueDate,
+                    subscriptionAmount = amount,
+                    subscriptionPaymentStatus = "Paid",
+                    trialStarted = false // move to full plan
+                )
+                repository.editPharmacy(updatedPharmacy)
+
+                // Update subscription details entity
+                val subFlow = repository.getSubscriptionForPharmacy(pharmacyId).firstOrNull()
+                val newSub = subFlow?.copy(
+                    validityDate = nextDueDate,
+                    price = amount
+                ) ?: com.example.data.SubscriptionEntity(
+                    id = "sub_" + java.util.UUID.randomUUID().toString().take(8),
+                    pharmacyId = pharmacyId,
+                    currentPlan = phar.subscriptionPlan,
+                    price = amount,
+                    validityDate = nextDueDate,
+                    autoRenewal = true
+                )
+                repository.updateSubscription(newSub)
+
+                // Register successful payment in payment history
+                val successRecord = com.example.data.payment.PaymentHistoryRecord(
+                    paymentId = paymentId,
+                    orderId = orderId,
+                    amount = amount,
+                    paymentType = com.example.data.payment.PaymentType.MONTHLY_SUBSCRIPTION_RENEWAL.name,
+                    paymentStatus = com.example.data.payment.PaymentStatus.success.name,
+                    createdDate = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date()),
+                    completedDate = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date()),
+                    pharmacyId = pharmacyId,
+                    signature = signature,
+                    method = paymentMethod
+                )
+                paymentRepository.insertPaymentHistory(successRecord)
+
+                // Trigger notification
+                val notification = com.example.data.NotificationEntity(
+                    title = "Subscription Renewed Successfully",
+                    message = "SaaS Access reactivated for ${phar.name}. Renewed successfully (Paid: ₹${amount.toInt()} via $paymentMethod, ID: $paymentId). Expiry: $nextDueDate.",
+                    timestamp = System.currentTimeMillis()
+                )
+                repository.addNotification(notification)
+
+                // Log audit action
+                repository.logAction("Subscription Renewal", "Pharmacy ${phar.name} successfully renewed. Expiry: $nextDueDate.")
+
+                onComplete(true, "Your SaaS subscription has been renewed successfully!\n\nAccess reactivated automatically.\n\nNext Billing Date: $nextDueDate")
+            } catch (e: Exception) {
+                onComplete(false, "Renewal failed: ${e.message}")
+            }
+        }
+    }
+
+    fun retryPayment(
+        orderId: String,
+        record: com.example.data.payment.PaymentHistoryRecord,
+        onResult: (com.example.data.payment.PaymentResult<com.example.data.payment.PaymentOrder>) -> Unit
+    ) {
+        viewModelScope.launch {
+            onResult(com.example.data.payment.PaymentResult.Loading)
+            val res = paymentRepository.retryPayment(orderId, record)
+            onResult(res)
+        }
+    }
+
+    fun getInvoiceUrl(paymentId: String, onResult: (com.example.data.payment.PaymentResult<String>) -> Unit) {
+        viewModelScope.launch {
+            onResult(com.example.data.payment.PaymentResult.Loading)
+            val res = paymentRepository.getInvoiceUrl(paymentId)
+            onResult(res)
+        }
+    }
+
+    fun getReceiptUrl(paymentId: String, onResult: (com.example.data.payment.PaymentResult<String>) -> Unit) {
+        viewModelScope.launch {
+            onResult(com.example.data.payment.PaymentResult.Loading)
+            val res = paymentRepository.getReceiptUrl(paymentId)
+            onResult(res)
         }
     }
 

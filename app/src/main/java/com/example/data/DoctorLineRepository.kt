@@ -648,43 +648,43 @@ class DoctorLineRepository(private val dao: DoctorLineDao) {
         }
     }
 
-    suspend fun rejectPharmacyRequest(requestId: String) {
+    suspend fun rejectPharmacyRequest(requestId: String, reason: String) {
         val requests = dao.getAllPharmacyRequests().firstOrNull() ?: emptyList()
         val req = requests.find { it.id == requestId }
         if (req != null) {
-            val rejectedReq = req.copy(status = "rejected")
+            val rejectedReq = req.copy(status = "rejected", rejectionReason = reason)
             dao.updatePharmacyRequest(rejectedReq)
             syncPharmacyRequest(rejectedReq)
 
             dao.insertNotification(
                 NotificationEntity(
                     title = "Pharmacy Request Rejected",
-                    message = "Pharmacy Registration Request for '${req.pharmacyName}' has been Rejected by Admin.",
+                    message = "Pharmacy Registration Request for '${req.pharmacyName}' has been Rejected by Admin. Reason: $reason",
                     timestamp = System.currentTimeMillis()
                 )
             )
 
-            logAction("Reject Pharmacy Request", "Rejected pharmacy registration: ${req.pharmacyName}")
+            logAction("Reject Pharmacy Request", "Rejected pharmacy registration: ${req.pharmacyName} for reason: $reason")
         }
     }
 
-    suspend fun requestCorrectionPharmacyRequest(requestId: String) {
+    suspend fun requestCorrectionPharmacyRequest(requestId: String, notes: String) {
         val requests = dao.getAllPharmacyRequests().firstOrNull() ?: emptyList()
         val req = requests.find { it.id == requestId }
         if (req != null) {
-            val correctedReq = req.copy(status = "correction_requested")
+            val correctedReq = req.copy(status = "correction_requested", correctionNotes = notes)
             dao.updatePharmacyRequest(correctedReq)
             syncPharmacyRequest(correctedReq)
 
             dao.insertNotification(
                 NotificationEntity(
                     title = "Correction Requested",
-                    message = "Pharmacy Registration Request for '${req.pharmacyName}' requires correction. Please verify submitted details.",
+                    message = "Pharmacy Registration Request for '${req.pharmacyName}' requires correction. Notes: $notes",
                     timestamp = System.currentTimeMillis()
                 )
             )
 
-            logAction("Correction Requested", "Requested corrections for pharmacy registration: ${req.pharmacyName}")
+            logAction("Correction Requested", "Requested corrections for pharmacy registration: ${req.pharmacyName} with notes: $notes")
         }
     }
 

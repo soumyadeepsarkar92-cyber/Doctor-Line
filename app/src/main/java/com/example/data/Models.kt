@@ -151,6 +151,8 @@ data class PharmacyRequestEntity(
     val paymentStatus: String? = null,
     val paymentAmount: Double? = null,
     val paymentDate: Long? = null,
+    val rejectionReason: String? = null,
+    val correctionNotes: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
 

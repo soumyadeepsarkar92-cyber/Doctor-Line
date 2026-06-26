@@ -2403,6 +2403,23 @@ fun PharmacySubscriptionScreen(viewModel: MainViewModel) {
     val pharmacies by viewModel.allPharmacies.collectAsState()
     val pricingSettings by viewModel.pricingSettings.collectAsState()
 
+    val activeTheme by viewModel.appTheme.collectAsState()
+    val isDark = when (activeTheme) {
+        "Dark" -> true
+        "Light" -> false
+        else -> androidx.compose.foundation.isSystemInDarkTheme()
+    }
+
+    val backgroundBg = if (isDark) Color(0xFF0F172A) else Color.White
+    val cardBg = if (isDark) Color(0xFF1E293B) else Color.White
+    val textPrimary = if (isDark) Color.White else Color(0xFF0F172A)
+    val textSecondary = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+
+    var showRazorpayRenewalCheckout by remember { mutableStateOf(false) }
+    var renewalOrderId by remember { mutableStateOf("") }
+    var feedbackMessage by remember { mutableStateOf<String?>(null) }
+    var isRenewing by remember { mutableStateOf(false) }
+
     val monthly = pricingSettings?.monthlySubscriptionFee ?: 10.0
     val quarterly = pricingSettings?.quarterlySubscriptionFee ?: 30.0
     val yearly = pricingSettings?.yearlySubscriptionFee ?: 100.0
@@ -2457,6 +2474,37 @@ fun PharmacySubscriptionScreen(viewModel: MainViewModel) {
         }
     }
 
+    var selectedPlanOption by remember(myPharmacy) {
+        mutableStateOf(
+            when {
+                myPharmacy?.subscriptionPlan?.contains("Quarterly", ignoreCase = true) == true -> "quarterly"
+                myPharmacy?.subscriptionPlan?.contains("Yearly", ignoreCase = true) == true -> "yearly"
+                else -> "monthly"
+            }
+        )
+    }
+
+    val renewalAmount = when (selectedPlanOption) {
+        "monthly" -> monthly
+        "quarterly" -> quarterly
+        "yearly" -> yearly
+        else -> monthly
+    }
+
+    val renewalLabel = when (selectedPlanOption) {
+        "monthly" -> " / Month"
+        "quarterly" -> " / Quarter"
+        "yearly" -> " / Year"
+        else -> " / Month"
+    }
+
+    val (statusLabel, statusBg, statusColor) = when (trialStatus) {
+        "Active" -> Triple("ACTIVE", Color(0xFF10B981), Color.White)
+        "Grace Period" -> Triple("GRACE PERIOD", Color(0xFFF59E0B), Color(0xFF1E293B))
+        "Suspended" -> Triple("EXPIRED", Color(0xFFEF4444), Color.White)
+        else -> Triple("NOT STARTED", Color(0xFF64748B), Color.White)
+    }
+
     // Gorgeous Luxury Purple Gradient brush
     val purpleGradient = Brush.verticalGradient(
         colors = listOf(
@@ -2468,7 +2516,7 @@ fun PharmacySubscriptionScreen(viewModel: MainViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(backgroundBg)
             .verticalScroll(rememberScrollState())
             .padding(24.dp)
     ) {
@@ -2476,7 +2524,7 @@ fun PharmacySubscriptionScreen(viewModel: MainViewModel) {
             text = "Pharmacy Subscriptions",
             fontSize = 20.sp,
             fontWeight = FontWeight.Black,
-            color = Color(0xFF0F172A),
+            color = textPrimary,
             modifier = Modifier.padding(bottom = 20.dp)
         )
 
@@ -2510,7 +2558,7 @@ fun PharmacySubscriptionScreen(viewModel: MainViewModel) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "CURRENT ACTIVE PLAN",
+                            text = "CURRENT PLAN: $planName",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White.copy(alpha = 0.7f),
@@ -2519,12 +2567,12 @@ fun PharmacySubscriptionScreen(viewModel: MainViewModel) {
                         Box(
                             modifier = Modifier
                                 .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.2f))
+                                .background(statusBg)
                                 .padding(horizontal = 10.dp, vertical = 4.dp)
                         ) {
                             Text(
-                                text = "PRO ACTIVE",
-                                color = Color.White,
+                                text = statusLabel,
+                                color = statusColor,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -2566,162 +2614,210 @@ fun PharmacySubscriptionScreen(viewModel: MainViewModel) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Subscription / Trial Status Dashboard Card
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Text(
-                    text = "TRIAL / SUBSCRIPTION DASHBOARD",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF64748B),
-                    letterSpacing = 1.sp,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
-                // Current Plan Row
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+        // Large Premium Status Indicator Banner
+        when (trialStatus) {
+            "Active" -> {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF064E3B) else Color(0xFFECFDF5)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFF10B981) else Color(0xFFA7F3D0)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Current Plan", fontSize = 13.sp, color = Color(0xFF475569))
-                    Text(
-                        text = planName,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A)
-                    )
-                }
-
-                // Trial Status Row
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Trial Status", fontSize = 13.sp, color = Color(0xFF475569))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(
-                                when (trialStatus) {
-                                    "Active" -> Color(0xFFDCFCE7)
-                                    "Grace Period" -> Color(0xFFFEF3C7)
-                                    "Suspended" -> Color(0xFFFEE2E2)
-                                    else -> Color(0xFFF1F5F9)
-                                }
-                            )
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("👑 Premium Pharmacy", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFFA7F3D0) else Color(0xFF065F46))
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("🟢 Subscription Active", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (isDark) Color(0xFF34D399) else Color(0xFF047857))
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = trialStatus.uppercase(),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = when (trialStatus) {
-                                "Active" -> Color(0xFF15803D)
-                                "Grace Period" -> Color(0xFFB45309)
-                                "Suspended" -> Color(0xFFB91C1C)
-                                else -> Color(0xFF475569)
-                            }
+                            text = "📅 Valid Until: ${subState?.validityDate ?: "2026-07-20"}",
+                            fontSize = 13.sp,
+                            color = if (isDark) Color(0xFF34D399) else Color(0xFF047857)
                         )
                     }
                 }
-
-                // Days Remaining Row
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            }
+            else -> {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF3F1A1A) else Color(0xFFFEF2F2)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFFEF4444) else Color(0xFFFCA5A5)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Days Remaining", fontSize = 13.sp, color = Color(0xFF475569))
-                    Text(
-                        text = if (daysRemaining >= 0) "$daysRemaining Days" else "0 Days",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (daysRemaining <= 3) Color(0xFFEF4444) else Color(0xFF0F172A)
-                    )
-                }
-
-                // Expiry Date Row
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Expiry Date", fontSize = 13.sp, color = Color(0xFF475569))
-                    Text(
-                        text = if (expiryStr.isEmpty()) "Not Activated" else expiryStr,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A)
-                    )
-                }
-
-                if (myPharmacy?.trialStarted == true && daysRemaining >= 0) {
-                    // Progress Bar
-                    Text(
-                        text = "Trial Progress (${(progress * 100).toInt()}% Elapsed)",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF64748B),
-                        modifier = Modifier.padding(bottom = 6.dp)
-                    )
-                    LinearProgressIndicator(
-                        progress = progress,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(8.dp)
-                            .clip(RoundedCornerShape(4.dp)),
-                        color = Color(0xFF6C5DD3),
-                        trackColor = Color(0xFFE2E8F0)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-
-                if (trialStatus == "Grace Period") {
-                    // Grace Period Remaining
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Color(0xFFFEF2F2))
-                            .padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("🔴 Subscription Expired", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFFFCA5A5) else Color(0xFF991B1B))
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Grace Period Remaining",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF991B1B)
+                            text = "Grace Period: $graceDaysLeft Days Left",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isDark) Color(0xFFEF4444) else Color(0xFFB91C1C)
                         )
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "$graceDaysLeft Days",
+                            text = "Expiry Date: ${subState?.validityDate ?: "2026-07-15"}",
                             fontSize = 13.sp,
+                            color = if (isDark) Color(0xFFFCA5A5) else Color(0xFF991B1B)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = {
+                                feedbackMessage = null
+                                renewalOrderId = "order_sub_" + java.util.UUID.randomUUID().toString().replace("-", "").take(10)
+                                showRazorpayRenewalCheckout = true
+                            },
+                            enabled = !isRenewing,
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                            modifier = Modifier.fillMaxWidth().height(44.dp)
+                        ) {
+                            Text("Renew Now", fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Premium Choose Renewal Plan Segmented Selection
+        Text(
+            text = "CHOOSE RENEWAL PACKAGE",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = textSecondary,
+            letterSpacing = 1.sp,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            val plansList = listOf(
+                Triple("monthly", "Monthly", monthly),
+                Triple("quarterly", "Quarterly", quarterly),
+                Triple("yearly", "Yearly", yearly)
+            )
+
+            plansList.forEach { (planId, label, amount) ->
+                val isSelected = selectedPlanOption == planId
+                val discountText = when (planId) {
+                    "quarterly" -> "Save 10%"
+                    "yearly" -> "Save 16%"
+                    else -> null
+                }
+                
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isSelected) (if (isDark) Color(0xFF2E2659) else Color(0xFFF5F3FF)) else (if (isDark) Color(0xFF1E293B) else Color(0xFFF8FAFC))
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(
+                        width = if (isSelected) 2.dp else 1.dp,
+                        color = if (isSelected) (if (isDark) Color(0xFF818CF8) else Color(0xFF6C5DD3)) else (if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0))
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { selectedPlanOption = planId }
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        if (discountText != null) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(
+                                        if (isSelected) (if (isDark) Color(0xFF818CF8) else Color(0xFF6C5DD3)) else (if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0))
+                                    )
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = discountText,
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSelected) Color.White else (if (isDark) Color(0xFF94A3B8) else Color(0xFF475569))
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                        } else {
+                            Spacer(modifier = Modifier.height(14.dp))
+                        }
+
+                        Icon(
+                            imageVector = when (planId) {
+                                "monthly" -> Icons.Rounded.CalendarToday
+                                "quarterly" -> Icons.Rounded.DateRange
+                                else -> Icons.Rounded.Stars
+                            },
+                            contentDescription = null,
+                            tint = if (isSelected) (if (isDark) Color(0xFF818CF8) else Color(0xFF6C5DD3)) else textSecondary,
+                            modifier = Modifier.size(20.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text(
+                            text = label,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSelected) (if (isDark) Color(0xFF818CF8) else Color(0xFF6C5DD3)) else (if (isDark) Color(0xFFCBD5E1) else Color(0xFF475569))
+                        )
+
+                        Spacer(modifier = Modifier.height(2.dp))
+
+                        Text(
+                            text = "₹${amount.toInt()}",
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Black,
-                            color = Color(0xFFEF4444)
+                            color = if (isSelected) (if (isDark) Color(0xFF818CF8) else Color(0xFF6C5DD3)) else textPrimary
                         )
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        Text("MEMBERSHIP BENEFITS", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF94A3B8), modifier = Modifier.padding(bottom = 12.dp))
+        if (myPharmacy?.trialStarted == true && daysRemaining >= 0) {
+            // Progress Bar
+            Text(
+                text = "Trial Progress (${(progress * 100).toInt()}% Elapsed)",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = textSecondary,
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+            LinearProgressIndicator(
+                progress = progress,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp)),
+                color = if (isDark) Color(0xFF818CF8) else Color(0xFF6C5DD3),
+                trackColor = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+        }
 
-        BenefitRow(text = "Register unlimited practicing doctors on portal")
-        BenefitRow(text = "Unlocks live slot booking with dynamic counter queues")
-        BenefitRow(text = "Sends notification SMS alerts securely")
+        Text("MEMBERSHIP BENEFITS", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8), modifier = Modifier.padding(bottom = 12.dp))
 
-        Spacer(modifier = Modifier.height(32.dp))
+        BenefitRow(text = "Register unlimited practicing doctors on portal", isDark = isDark)
+        BenefitRow(text = "Unlocks live slot booking with dynamic counter queues", isDark = isDark)
+        BenefitRow(text = "Sends notification SMS alerts securely", isDark = isDark)
 
-        Divider(color = Color(0xFFE2E8F0))
+        Spacer(modifier = Modifier.height(24.dp))
+
+        HorizontalDivider(color = if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0))
 
         Spacer(modifier = Modifier.height(20.dp))
 
@@ -2730,14 +2826,14 @@ fun PharmacySubscriptionScreen(viewModel: MainViewModel) {
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFFF8FAFC))
+                .background(if (isDark) Color(0xFF1E293B) else Color(0xFFF8FAFC))
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column {
-                Text("Automatic Renewal Plan", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF1E293B))
-                Text("Deducted from link card every month", fontSize = 11.sp, color = Color(0xFF64748B))
+                Text("Automatic Renewal Plan", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = textPrimary)
+                Text("Deducted from linked card every month", fontSize = 11.sp, color = textSecondary)
             }
             Switch(
                 checked = autoRenewal,
@@ -2748,8 +2844,8 @@ fun PharmacySubscriptionScreen(viewModel: MainViewModel) {
                     }
                 },
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color(0xFF6C5DD3),
-                    checkedTrackColor = Color(0xFF6C5DD3).copy(alpha = 0.3f)
+                    checkedThumbColor = if (isDark) Color(0xFF818CF8) else Color(0xFF6C5DD3),
+                    checkedTrackColor = (if (isDark) Color(0xFF818CF8) else Color(0xFF6C5DD3)).copy(alpha = 0.3f)
                 )
             )
         }
@@ -2757,20 +2853,87 @@ fun PharmacySubscriptionScreen(viewModel: MainViewModel) {
         Spacer(modifier = Modifier.height(24.dp))
 
         Button(
-            onClick = { /* Razorpay simulated payment gateway */ },
+            onClick = {
+                feedbackMessage = null
+                renewalOrderId = "order_sub_" + java.util.UUID.randomUUID().toString().replace("-", "").take(10)
+                showRazorpayRenewalCheckout = true
+            },
+            enabled = !isRenewing,
             shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6C5DD3)),
+            colors = ButtonDefaults.buttonColors(containerColor = if (isDark) Color(0xFF4F46E5) else Color(0xFF6C5DD3)),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp)
         ) {
-            Text("Renew Subscription Now", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            if (isRenewing) {
+                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Renewing...", fontWeight = FontWeight.Bold)
+            } else {
+                Text("Renew Plan for ₹${renewalAmount.toInt()} Now", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            }
         }
     }
+
+    // Feedback Alert Dialog
+    if (feedbackMessage != null) {
+        AlertDialog(
+            onDismissRequest = { feedbackMessage = null },
+            confirmButton = {
+                Button(
+                    onClick = { feedbackMessage = null },
+                    colors = ButtonDefaults.buttonColors(containerColor = if (isDark) Color(0xFF4F46E5) else Color(0xFF6C5DD3))
+                ) {
+                    Text("OK")
+                }
+            },
+            title = {
+                Text(
+                    text = if (feedbackMessage!!.lowercase().contains("success")) "Success" else "Info",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(text = feedbackMessage!!)
+            }
+        )
+    }
+
+    // Interactive Razorpay Checkout Dialog for Subscription Renewal
+    RazorpayCheckoutDialog(
+        visible = showRazorpayRenewalCheckout,
+        amount = renewalAmount,
+        orderId = renewalOrderId,
+        email = activeUser?.email ?: "pharmacy@saas.com",
+        onSuccess = { paymentId, signature, method ->
+            isRenewing = true
+            showRazorpayRenewalCheckout = false
+            viewModel.renewPharmacySubscription(
+                pharmacyId = activeUser?.id ?: "",
+                amount = renewalAmount,
+                paymentId = paymentId,
+                orderId = renewalOrderId,
+                signature = signature,
+                paymentMethod = method,
+                onComplete = { success, msg ->
+                    isRenewing = false
+                    feedbackMessage = msg
+                }
+            )
+        },
+        onFailure = { reason ->
+            showRazorpayRenewalCheckout = false
+            feedbackMessage = "Renewal Failed: $reason"
+        },
+        onDismiss = {
+            showRazorpayRenewalCheckout = false
+            feedbackMessage = "Renewal Cancelled by User"
+        }
+    )
 }
 
 @Composable
-fun BenefitRow(text: String) {
+fun BenefitRow(text: String, isDark: Boolean = false) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -2784,6 +2947,6 @@ fun BenefitRow(text: String) {
             modifier = Modifier.size(18.dp)
         )
         Spacer(modifier = Modifier.width(10.dp))
-        Text(text = text, color = Color(0xFF475569), fontSize = 13.sp)
+        Text(text = text, color = if (isDark) Color(0xFFCBD5E1) else Color(0xFF475569), fontSize = 13.sp)
     }
 }

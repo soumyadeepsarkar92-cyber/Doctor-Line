@@ -8,6 +8,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import com.example.data.payment.PaymentHistoryRecord
 
 @Database(
     entities = [
@@ -23,9 +24,10 @@ import kotlinx.coroutines.launch
         ReviewEntity::class,
         PharmacyRequestEntity::class,
         FavouriteDoctorEntity::class,
-        PricingSettingsEntity::class
+        PricingSettingsEntity::class,
+        PaymentHistoryRecord::class
     ],
-    version = 10,
+    version = 13,
     exportSchema = false
 )
 abstract class DoctorLineDatabase : RoomDatabase() {

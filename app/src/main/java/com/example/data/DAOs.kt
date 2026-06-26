@@ -2,6 +2,7 @@ package com.example.data
 
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
+import com.example.data.payment.PaymentHistoryRecord
 
 @Dao
 interface DoctorLineDao {
@@ -116,6 +117,15 @@ interface DoctorLineDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPayment(payment: PaymentEntity)
+
+    @Query("SELECT * FROM payment_history ORDER BY createdDate DESC")
+    fun getAllPaymentHistories(): Flow<List<PaymentHistoryRecord>>
+
+    @Query("SELECT * FROM payment_history WHERE pharmacyId = :pharmacyId ORDER BY createdDate DESC")
+    fun getPaymentHistoryByPharmacy(pharmacyId: String): Flow<List<PaymentHistoryRecord>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPaymentHistory(record: PaymentHistoryRecord)
 
     // Notifications
     @Query("SELECT * FROM notifications ORDER BY timestamp DESC")

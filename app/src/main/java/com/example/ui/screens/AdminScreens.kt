@@ -583,6 +583,7 @@ fun PieMetricLegend(color: Color, title: String, viewModel: MainViewModel) {
 fun AdminPharmaciesView(viewModel: MainViewModel) {
     val pharmacies by viewModel.allPharmacies.collectAsState()
     val pricingSettings by viewModel.pricingSettings.collectAsState()
+    val paymentHistory by viewModel.allPaymentHistory.collectAsState()
 
     val monthly = pricingSettings?.monthlySubscriptionFee ?: 10.0
     val quarterly = pricingSettings?.quarterlySubscriptionFee ?: 30.0
@@ -751,6 +752,7 @@ fun AdminPharmaciesView(viewModel: MainViewModel) {
                             Divider(modifier = Modifier.padding(vertical = 10.dp))
 
                             // Pharmacy Management Fields Table
+                            val latestPayment = paymentHistory.filter { it.pharmacyId == phar.id }.maxByOrNull { it.createdDate }
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 TableFieldRow("Owner Name", phar.ownerName)
                                 TableFieldRow("Mobile Number", phar.phone)
@@ -761,6 +763,11 @@ fun AdminPharmaciesView(viewModel: MainViewModel) {
                                 TableFieldRow("Plan Validity", "${phar.subscriptionStart} to ${phar.subscriptionExpiry}")
                                 TableFieldRow("Invoice Value", "₹${phar.subscriptionAmount.toInt()}")
                                 TableFieldRow("Payment Status", phar.subscriptionPaymentStatus)
+                                TableFieldRow("Payment ID", latestPayment?.paymentId ?: "N/A")
+                                TableFieldRow("Razorpay Order ID", latestPayment?.orderId ?: "N/A")
+                                TableFieldRow("Last Renewal Date", phar.subscriptionStart)
+                                TableFieldRow("Next Renewal Date", phar.subscriptionExpiry)
+                                TableFieldRow("Subscription Status", if (phar.status == "Active") "Active" else "Suspended")
                             }
 
                             Divider(modifier = Modifier.padding(vertical = 10.dp))
@@ -1280,6 +1287,19 @@ fun AdminAuditView(viewModel: MainViewModel) {
 // ============================================
 @Composable
 fun AdminSettingsView(viewModel: MainViewModel, logout: () -> Unit) {
+    val activeTheme by viewModel.appTheme.collectAsState()
+    val isDark = when (activeTheme) {
+        "Dark" -> true
+        "Light" -> false
+        else -> androidx.compose.foundation.isSystemInDarkTheme()
+    }
+
+    val cardBg = if (isDark) Color(0xFF1E293B) else Color.White
+    val textPrimary = if (isDark) Color.White else Color(0xFF0F172A)
+    val textSecondary = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val buttonBgOption = if (isDark) Color(0xFF334155) else Color(0xFFEEF2F6)
+    val buttonTextOption = if (isDark) Color(0xFFCBD5E1) else Color(0xFF334155)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1290,7 +1310,7 @@ fun AdminSettingsView(viewModel: MainViewModel, logout: () -> Unit) {
         // Supabase Connectivity Monitor Card
         Card(
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1306,7 +1326,7 @@ fun AdminSettingsView(viewModel: MainViewModel, logout: () -> Unit) {
                     Text(
                         text = if (isConfigured) "Supabase Connection: Active" else "Supabase Connection: Local Sandbox Mode",
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A),
+                        color = textPrimary,
                         fontSize = 14.sp
                     )
                 }
@@ -1315,7 +1335,7 @@ fun AdminSettingsView(viewModel: MainViewModel, logout: () -> Unit) {
                         "The application is streaming and syncing login metadata and patient bookings directly to your live Supabase database instance."
                         else "To go Live, enter your SUPABASE_URL and SUPABASE_ANON_KEY securely in the AI Studio Secrets panel. Otherwise, components continue in high-fidelity local memory emulation.",
                     fontSize = 12.sp,
-                    color = Color(0xFF64748B),
+                    color = textSecondary,
                     lineHeight = 18.sp
                 )
             }
@@ -1332,27 +1352,33 @@ fun AdminSettingsView(viewModel: MainViewModel, logout: () -> Unit) {
 
         Card(
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(
                     text = "Configurable SaaS Pricing Settings",
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0F172A),
+                    color = textPrimary,
                     fontSize = 14.sp
                 )
                 Text(
                     text = "Configure pricing values used platform-wide. Changes take effect instantly without any code modifications.",
                     fontSize = 12.sp,
-                    color = Color(0xFF64748B)
+                    color = textSecondary
                 )
 
                 OutlinedTextField(
                     value = regFee,
                     onValueChange = { regFee = it },
-                    label = { Text("Registration Fee (₹)") },
+                    label = { Text("Registration Fee (₹)", color = textSecondary) },
                     modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = textPrimary,
+                        unfocusedTextColor = textPrimary,
+                        focusedBorderColor = Color(0xFF0F52BA),
+                        unfocusedBorderColor = if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1)
+                    ),
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                         keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
                     )
@@ -1361,8 +1387,14 @@ fun AdminSettingsView(viewModel: MainViewModel, logout: () -> Unit) {
                 OutlinedTextField(
                     value = monthlyFee,
                     onValueChange = { monthlyFee = it },
-                    label = { Text("Monthly Subscription Fee (₹)") },
+                    label = { Text("Monthly Subscription Fee (₹)", color = textSecondary) },
                     modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = textPrimary,
+                        unfocusedTextColor = textPrimary,
+                        focusedBorderColor = Color(0xFF0F52BA),
+                        unfocusedBorderColor = if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1)
+                    ),
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                         keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
                     )
@@ -1371,8 +1403,14 @@ fun AdminSettingsView(viewModel: MainViewModel, logout: () -> Unit) {
                 OutlinedTextField(
                     value = quarterlyFee,
                     onValueChange = { quarterlyFee = it },
-                    label = { Text("Quarterly Subscription Fee (₹)") },
+                    label = { Text("Quarterly Subscription Fee (₹)", color = textSecondary) },
                     modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = textPrimary,
+                        unfocusedTextColor = textPrimary,
+                        focusedBorderColor = Color(0xFF0F52BA),
+                        unfocusedBorderColor = if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1)
+                    ),
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                         keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
                     )
@@ -1381,8 +1419,14 @@ fun AdminSettingsView(viewModel: MainViewModel, logout: () -> Unit) {
                 OutlinedTextField(
                     value = yearlyFee,
                     onValueChange = { yearlyFee = it },
-                    label = { Text("Yearly Subscription Fee (₹)") },
+                    label = { Text("Yearly Subscription Fee (₹)", color = textSecondary) },
                     modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = textPrimary,
+                        unfocusedTextColor = textPrimary,
+                        focusedBorderColor = Color(0xFF0F52BA),
+                        unfocusedBorderColor = if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1)
+                    ),
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                         keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
                     )
@@ -1414,14 +1458,14 @@ fun AdminSettingsView(viewModel: MainViewModel, logout: () -> Unit) {
         // App Theme Settings Card
         Card(
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Text(
                     text = "System Theme Preferences",
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0F172A),
+                    color = textPrimary,
                     modifier = Modifier.padding(bottom = 12.dp),
                     fontSize = 14.sp
                 )
@@ -1438,7 +1482,7 @@ fun AdminSettingsView(viewModel: MainViewModel, logout: () -> Unit) {
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(if (isSelected) Color(0xFF0F52BA) else Color(0xFFEEF2F6))
+                                .background(if (isSelected) Color(0xFF0F52BA) else buttonBgOption)
                                 .clickable { viewModel.updateTheme(themeName) }
                                 .padding(vertical = 10.dp),
                             contentAlignment = Alignment.Center
@@ -1447,7 +1491,7 @@ fun AdminSettingsView(viewModel: MainViewModel, logout: () -> Unit) {
                                 text = themeName,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (isSelected) Color.White else Color(0xFF334155)
+                                color = if (isSelected) Color.White else buttonTextOption
                             )
                         }
                     }
@@ -1457,22 +1501,22 @@ fun AdminSettingsView(viewModel: MainViewModel, logout: () -> Unit) {
 
         Card(
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text("Developer Simulation Controls", fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
-                Text("DoctorLine operates in high-stability sandbox offline-sync mode with pre-seeded database engines. In this console view you can test components in real-time.", fontSize = 12.sp, color = Color(0xFF64748B))
+                Text("Developer Simulation Controls", fontWeight = FontWeight.Bold, color = textPrimary)
+                Text("DoctorLine operates in high-stability sandbox offline-sync mode with pre-seeded database engines. In this console view you can test components in real-time.", fontSize = 12.sp, color = textSecondary)
                 
                 Button(
                     onClick = {
                         // Resets database state
                     },
                     shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEEF2F6)),
+                    colors = ButtonDefaults.buttonColors(containerColor = buttonBgOption),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Re-validate Database Seed Cache", color = Color(0xFF475569), fontWeight = FontWeight.Bold)
+                    Text("Re-validate Database Seed Cache", color = buttonTextOption, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -1493,49 +1537,200 @@ fun AdminSettingsView(viewModel: MainViewModel, logout: () -> Unit) {
 @Composable
 fun AdminRequestsView(viewModel: MainViewModel) {
     val requests by viewModel.allPharmacyRequests.collectAsState()
+    val pharmacies by viewModel.allPharmacies.collectAsState()
     val activeUser by viewModel.activeUser.collectAsState()
     val currentAdminId = activeUser?.id ?: "master_admin"
+
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedFilter by remember { mutableStateOf("All") }
 
     var selectedImageUri by remember { mutableStateOf<String?>(null) }
     var selectedImageTitle by remember { mutableStateOf("") }
 
-    val pendingRequests = requests.filter { it.status.lowercase() == "pending" }
-    val approvedRequests = requests.filter { it.status.lowercase() == "approved" }
-    val rejectedRequests = requests.filter { it.status.lowercase() == "rejected" }
+    // Rejection Dialog State
+    var showRejectDialogForId by remember { mutableStateOf<String?>(null) }
+    var rejectionReasonInput by remember { mutableStateOf("") }
+
+    // Correction Dialog State
+    var showCorrectionDialogForId by remember { mutableStateOf<String?>(null) }
+    var correctionNotesInput by remember { mutableStateOf("") }
+
+    // Payment Dialog State
+    var viewPaymentRequest by remember { mutableStateOf<PharmacyRequestEntity?>(null) }
+
+    // Details Dialog State
+    var viewDetailsRequest by remember { mutableStateOf<PharmacyRequestEntity?>(null) }
+
+    // Helpers to check "today"
+    fun isToday(timestamp: Long?): Boolean {
+        if (timestamp == null) return false
+        val cal1 = java.util.Calendar.getInstance()
+        val cal2 = java.util.Calendar.getInstance()
+        cal2.timeInMillis = timestamp
+        return cal1.get(java.util.Calendar.YEAR) == cal2.get(java.util.Calendar.YEAR) &&
+               cal1.get(java.util.Calendar.DAY_OF_YEAR) == cal2.get(java.util.Calendar.DAY_OF_YEAR)
+    }
+
+    // KPI Card Computations
+    val pendingVerificationCount = requests.filter { 
+        it.status.lowercase() == "pending" || 
+        it.status.lowercase() == "pending_verification" || 
+        it.status.lowercase() == "correction_requested" 
+    }.size
+
+    val approvedTodayCount = requests.filter { 
+        it.status.lowercase() == "approved" && isToday(it.approvedAt) 
+    }.size
+
+    val rejectedTodayCount = requests.filter { 
+        it.status.lowercase() == "rejected" && isToday(it.createdAt) // approximate date of reject is createdAt of request in sandbox
+    }.size
+
+    val registrationRevenue = requests.filter { 
+        it.paymentStatus?.lowercase() == "success" || 
+        it.paymentStatus?.lowercase() == "paid" || 
+        it.paymentStatus?.lowercase() == "successful" ||
+        it.paymentStatus?.lowercase() == "payment_completed"
+    }.sumOf { it.paymentAmount ?: 0.0 }
+
+    val activePharmaciesCount = pharmacies.filter { it.status.lowercase() == "active" }.size
+
+    val pendingPaymentsCount = requests.filter { 
+        it.paymentStatus.isNullOrEmpty() || it.paymentStatus?.lowercase() == "pending" 
+    }.size
+
+    val totalProcessed = requests.filter { 
+        it.status.lowercase() == "approved" || it.status.lowercase() == "rejected" 
+    }.size
+    val approvalRate = if (totalProcessed > 0) {
+        (requests.filter { it.status.lowercase() == "approved" }.size.toDouble() / totalProcessed * 100).toInt()
+    } else {
+        0
+    }
+
+    val todayRegistrationsCount = requests.filter { isToday(it.createdAt) }.size
+
+    // Filtering logic
+    val filteredRequests = requests.filter { req ->
+        val matchesSearch = if (searchQuery.isEmpty()) {
+            true
+        } else {
+            req.pharmacyName.contains(searchQuery, ignoreCase = true) ||
+            req.ownerName.contains(searchQuery, ignoreCase = true) ||
+            req.licenseNo.contains(searchQuery, ignoreCase = true) ||
+            req.mobile.contains(searchQuery, ignoreCase = true) ||
+            (req.paymentId?.contains(searchQuery, ignoreCase = true) ?: false)
+        }
+
+        val matchesFilter = when (selectedFilter) {
+            "All" -> true
+            "Pending" -> req.status.lowercase() == "pending" || req.status.lowercase() == "pending_verification"
+            "Approved" -> req.status.lowercase() == "approved"
+            "Rejected" -> req.status.lowercase() == "rejected"
+            "Correction Requested" -> req.status.lowercase() == "correction_requested"
+            "Payment Pending" -> req.paymentStatus.isNullOrEmpty() || req.paymentStatus?.lowercase() == "pending"
+            "Payment Successful" -> req.paymentStatus?.lowercase() == "success" || req.paymentStatus?.lowercase() == "paid" || req.paymentStatus?.lowercase() == "successful" || req.paymentStatus?.lowercase() == "payment_completed"
+            else -> true
+        }
+
+        matchesSearch && matchesFilter
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
-        // Summary row
+        // SaaS KPI Grid Section
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                SummaryCard(
-                    title = "Pending",
-                    count = pendingRequests.size,
-                    color = Color(0xFFEAB308),
-                    modifier = Modifier.weight(1f)
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Realtime SaaS Performance Metrics",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF64748B)
                 )
-                SummaryCard(
-                    title = "Approved",
-                    count = approvedRequests.size,
-                    color = Color(0xFF22C55E),
-                    modifier = Modifier.weight(1f)
-                )
-                SummaryCard(
-                    title = "Rejected",
-                    count = rejectedRequests.size,
-                    color = Color(0xFFEF4444),
-                    modifier = Modifier.weight(1f)
-                )
+                
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    RequestKpiCard("Pending Verification", pendingVerificationCount.toString(), Icons.Rounded.HourglassEmpty, Color(0xFFF59E0B), Modifier.weight(1f))
+                    RequestKpiCard("Today's Registrations", todayRegistrationsCount.toString(), Icons.Rounded.AppRegistration, Color(0xFF6366F1), Modifier.weight(1f))
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    RequestKpiCard("Approved Today", approvedTodayCount.toString(), Icons.Rounded.CheckCircle, Color(0xFF10B981), Modifier.weight(1f))
+                    RequestKpiCard("Rejected Today", rejectedTodayCount.toString(), Icons.Rounded.Cancel, Color(0xFFEF4444), Modifier.weight(1f))
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    RequestKpiCard("Registration Revenue", "$${String.format(Locale.getDefault(), "%.2f", registrationRevenue)}", Icons.Rounded.AttachMoney, Color(0xFF0D9488), Modifier.weight(1f))
+                    RequestKpiCard("Active Pharmacies", activePharmaciesCount.toString(), Icons.Rounded.LocalPharmacy, Color(0xFF3B82F6), Modifier.weight(1f))
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    RequestKpiCard("Pending Payments", pendingPaymentsCount.toString(), Icons.Rounded.Receipt, Color(0xFFD97706), Modifier.weight(1f))
+                    RequestKpiCard("Approval Rate", "$approvalRate%", Icons.Rounded.RateReview, Color(0xFF8B5CF6), Modifier.weight(1f))
+                }
             }
         }
 
-        if (requests.isEmpty()) {
+        // Modern Search & Interactive Filter Control
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Search by name, owner, license, mobile, payment ID...", fontSize = 13.sp) },
+                        leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, tint = Color(0xFF64748B), modifier = Modifier.size(18.dp)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF5D3FD3),
+                            unfocusedBorderColor = Color(0xFFE2E8F0)
+                        )
+                    )
+                    
+                    Spacer(modifier = Modifier.height(10.dp))
+                    
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val filterCategories = listOf(
+                            "All",
+                            "Pending",
+                            "Approved",
+                            "Rejected",
+                            "Correction Requested",
+                            "Payment Pending",
+                            "Payment Successful"
+                        )
+                        filterCategories.forEach { filterName ->
+                            val isSelected = selectedFilter == filterName
+                            val chipColor = if (isSelected) Color(0xFF5D3FD3) else Color(0xFFF1F5F9)
+                            val textColor = if (isSelected) Color.White else Color(0xFF475569)
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(chipColor)
+                                    .clickable { selectedFilter = filterName }
+                                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                            ) {
+                                Text(filterName, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = textColor)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // List of Requests
+        if (filteredRequests.isEmpty()) {
             item {
                 Card(
                     shape = RoundedCornerShape(16.dp),
@@ -1559,14 +1754,14 @@ fun AdminRequestsView(viewModel: MainViewModel) {
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "No Pharmacy Requests Yet",
+                            text = "No Pharmacy Requests Matches Filters",
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
                             color = Color(0xFF0F172A)
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Submitted registration requests from pharmacies will appear here.",
+                            text = "Adjust your search parameters or filters to discover active submissions.",
                             fontSize = 13.sp,
                             color = Color(0xFF64748B),
                             textAlign = TextAlign.Center
@@ -1575,15 +1770,18 @@ fun AdminRequestsView(viewModel: MainViewModel) {
                 }
             }
         } else {
-            items(requests) { req ->
+            items(filteredRequests) { req ->
                 PharmacyRequestCard(
                     req = req,
                     onApprove = { viewModel.approvePharmacyRequest(req.id, currentAdminId) },
-                    onReject = { viewModel.rejectPharmacyRequest(req.id) },
+                    onReject = { showRejectDialogForId = req.id },
+                    onRequestCorrection = { showCorrectionDialogForId = req.id },
                     onViewImage = { uri, title ->
                         selectedImageUri = uri
                         selectedImageTitle = title
-                    }
+                    },
+                    onViewPayment = { viewPaymentRequest = req },
+                    onViewDetails = { viewDetailsRequest = req }
                 )
             }
         }
@@ -1627,35 +1825,208 @@ fun AdminRequestsView(viewModel: MainViewModel) {
             }
         )
     }
+
+    // Rejection dialog requiring justification
+    if (showRejectDialogForId != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showRejectDialogForId = null
+                rejectionReasonInput = ""
+            },
+            title = { Text("Reject Pharmacy Registration", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Please provide a reason for rejecting this pharmacy's request. This will be transmitted to them in realtime.", fontSize = 13.sp, color = Color(0xFF475569))
+                    OutlinedTextField(
+                        value = rejectionReasonInput,
+                        onValueChange = { rejectionReasonInput = it },
+                        placeholder = { Text("e.g. Drug license has expired or does not match storefront details.") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3,
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Color.Red)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val reqId = showRejectDialogForId
+                        if (reqId != null && rejectionReasonInput.isNotBlank()) {
+                            viewModel.rejectPharmacyRequest(reqId, rejectionReasonInput.trim())
+                            showRejectDialogForId = null
+                            rejectionReasonInput = ""
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                    enabled = rejectionReasonInput.isNotBlank()
+                ) {
+                    Text("Confirm Rejection")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showRejectDialogForId = null
+                    rejectionReasonInput = ""
+                }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Correction Request dialog prompting notes
+    if (showCorrectionDialogForId != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showCorrectionDialogForId = null
+                correctionNotesInput = ""
+            },
+            title = { Text("Request Correction Notes", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Provide explicit correction notes for the pharmacy. Only fields marked will become editable in their portal.", fontSize = 13.sp, color = Color(0xFF475569))
+                    OutlinedTextField(
+                        value = correctionNotesInput,
+                        onValueChange = { correctionNotesInput = it },
+                        placeholder = { Text("e.g. Upload a higher resolution photo of your Drug License certificate.") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3,
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Color(0xFFF59E0B))
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val reqId = showCorrectionDialogForId
+                        if (reqId != null && correctionNotesInput.isNotBlank()) {
+                            viewModel.requestCorrectionPharmacyRequest(reqId, correctionNotesInput.trim())
+                            showCorrectionDialogForId = null
+                            correctionNotesInput = ""
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B)),
+                    enabled = correctionNotesInput.isNotBlank()
+                ) {
+                    Text("Submit Notes")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showCorrectionDialogForId = null
+                    correctionNotesInput = ""
+                }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Payment details dialog
+    if (viewPaymentRequest != null) {
+        val req = viewPaymentRequest!!
+        AlertDialog(
+            onDismissRequest = { viewPaymentRequest = null },
+            title = { Text("Pharmacy Payment Receipt", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    DetailRow(icon = Icons.Rounded.Receipt, label = "Payment Reference ID", value = req.paymentId ?: "N/A")
+                    DetailRow(icon = Icons.Rounded.AttachMoney, label = "Total Registration Fee", value = "$${String.format(Locale.getDefault(), "%.2f", req.paymentAmount ?: 0.0)}")
+                    DetailRow(icon = Icons.Rounded.CalendarToday, label = "Payment Date & Time", value = req.paymentDate?.let { SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(Date(it)) } ?: "N/A")
+                    DetailRow(icon = Icons.Rounded.Info, label = "Payment Gateway Status", value = (req.paymentStatus ?: "Pending").uppercase())
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewPaymentRequest = null }) {
+                    Text("OK", fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
+    // Full profile details dialog
+    if (viewDetailsRequest != null) {
+        val req = viewDetailsRequest!!
+        AlertDialog(
+            onDismissRequest = { viewDetailsRequest = null },
+            title = { Text("Pharmacy Core Profile Details", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    DetailRow(icon = Icons.Rounded.LocalPharmacy, label = "Pharmacy Name", value = req.pharmacyName)
+                    DetailRow(icon = Icons.Rounded.Person, label = "Registered Owner", value = req.ownerName)
+                    DetailRow(icon = Icons.Rounded.Badge, label = "Drug License Number", value = req.licenseNo)
+                    DetailRow(icon = Icons.Rounded.Phone, label = "Contact Mobile Number", value = req.mobile)
+                    DetailRow(icon = Icons.Rounded.Receipt, label = "Official Email ID", value = req.email)
+                    DetailRow(icon = Icons.Rounded.LocationOn, label = "Physical Address Location", value = req.address)
+                    DetailRow(icon = Icons.Rounded.CalendarToday, label = "Application Date", value = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(Date(req.createdAt)))
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewDetailsRequest = null }) {
+                    Text("Done", fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
 }
 
 @Composable
-fun SummaryCard(
+fun RequestKpiCard(
     title: String,
-    count: Int,
+    value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     color: Color,
     modifier: Modifier = Modifier
 ) {
     Card(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = modifier
     ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(color))
-                Text(title, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF64748B))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF64748B),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = value,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color(0xFF1F2937),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
-            Text(
-                text = count.toString(),
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Black,
-                color = Color(0xFF0F172A)
-            )
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(color.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = color,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
     }
 }
@@ -1665,13 +2036,22 @@ fun PharmacyRequestCard(
     req: PharmacyRequestEntity,
     onApprove: () -> Unit,
     onReject: () -> Unit,
-    onViewImage: (String, String) -> Unit
+    onRequestCorrection: () -> Unit,
+    onViewImage: (String, String) -> Unit,
+    onViewPayment: () -> Unit,
+    onViewDetails: () -> Unit
 ) {
     val statusColor = when (req.status.lowercase()) {
-        "approved" -> Color(0xFF22C55E)
+        "approved" -> Color(0xFF10B981)
         "rejected" -> Color(0xFFEF4444)
-        else -> Color(0xFFEAB308)
+        "correction_requested" -> Color(0xFFF59E0B)
+        else -> Color(0xFF3B82F6)
     }
+
+    val isPaymentSuccessful = req.paymentStatus?.lowercase() == "success" || 
+                              req.paymentStatus?.lowercase() == "paid" || 
+                              req.paymentStatus?.lowercase() == "successful" ||
+                              req.paymentStatus?.lowercase() == "payment_completed"
 
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -1680,26 +2060,51 @@ fun PharmacyRequestCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
-            // Header Row: Pharmacy Name & Status Badge
+            // Header Row: Pharmacy Details & Badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = req.pharmacyName,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        color = Color(0xFF0F172A),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "Submitted: " + SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(Date(req.createdAt)),
-                        fontSize = 11.sp,
-                        color = Color(0xFF94A3B8)
-                    )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    // Pharmacy Photo or Icon representation
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFFF1F5F9)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (req.pharmacyPhoto != null) {
+                            AsyncImage(
+                                model = req.pharmacyPhoto,
+                                contentDescription = "Pharmacy Logo",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            )
+                        } else {
+                            Icon(Icons.Rounded.LocalPharmacy, contentDescription = null, tint = Color(0xFF5D3FD3), modifier = Modifier.size(24.dp))
+                        }
+                    }
+                    Column {
+                        Text(
+                            text = req.pharmacyName,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = Color(0xFF0F172A),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "Submitted: " + SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(Date(req.createdAt)),
+                            fontSize = 11.sp,
+                            color = Color(0xFF94A3B8)
+                        )
+                    }
                 }
 
                 Box(
@@ -1709,7 +2114,7 @@ fun PharmacyRequestCard(
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Text(
-                        text = req.status.replaceFirstChar { it.uppercase() },
+                        text = req.status.uppercase().replace("_", " "),
                         color = statusColor,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
@@ -1719,24 +2124,24 @@ fun PharmacyRequestCard(
 
             Divider(color = Color(0xFFF1F5F9), modifier = Modifier.padding(vertical = 12.dp))
 
-            // Grid / Details Area
+            // Information details
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                DetailRow(icon = Icons.Rounded.Person, label = "Owner", value = req.ownerName)
-                DetailRow(icon = Icons.Rounded.Badge, label = "Drug License", value = req.licenseNo)
-                DetailRow(icon = Icons.Rounded.Phone, label = "Contact", value = "${req.mobile} • ${req.email}")
-                DetailRow(icon = Icons.Rounded.LocationOn, label = "Address", value = req.address)
+                DetailRow(icon = Icons.Rounded.Person, label = "Owner / Contact Person", value = req.ownerName)
+                DetailRow(icon = Icons.Rounded.Badge, label = "Drug License Number", value = req.licenseNo)
+                DetailRow(icon = Icons.Rounded.Phone, label = "Mobile & Email Link", value = "${req.mobile} • ${req.email}")
+                DetailRow(icon = Icons.Rounded.LocationOn, label = "Physical Address", value = req.address)
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Document Uploads row
+            // Document Thumbnails
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 DocumentThumb(
                     title = "Drug License",
-                    subtitle = "Verify registration certificate",
+                    subtitle = "Verify registration",
                     onClick = { onViewImage(req.licenseImage, "${req.pharmacyName} - Drug License") },
                     modifier = Modifier.weight(1f)
                 )
@@ -1744,7 +2149,7 @@ fun PharmacyRequestCard(
                 if (req.pharmacyPhoto != null) {
                     DocumentThumb(
                         title = "Storefront",
-                        subtitle = "Verify premises photo",
+                        subtitle = "Verify premises",
                         onClick = { onViewImage(req.pharmacyPhoto, "${req.pharmacyName} - Storefront Photo") },
                         modifier = Modifier.weight(1f)
                     )
@@ -1762,42 +2167,231 @@ fun PharmacyRequestCard(
                 }
             }
 
-            // Action Buttons (Only show if pending)
-            if (req.status.lowercase() == "pending") {
-                Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
+            // Premium visual timeline of verification phases
+            RequestTimeline(req = req)
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Action section & Verification Buttons
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // View action Row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     OutlinedButton(
-                        onClick = onReject,
+                        onClick = onViewDetails,
                         shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF4444)),
-                        border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.5f)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF475569)),
+                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
                         modifier = Modifier
                             .weight(1f)
-                            .height(42.dp)
+                            .height(38.dp)
                     ) {
-                        Icon(Icons.Rounded.Cancel, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Reject Request", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text("View Details", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
 
-                    Button(
-                        onClick = onApprove,
+                    OutlinedButton(
+                        onClick = onViewPayment,
                         shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF22C55E)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0D9488)),
+                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
                         modifier = Modifier
-                            .weight(1.2f)
-                            .height(42.dp)
+                            .weight(1f)
+                            .height(38.dp)
                     ) {
-                        Icon(Icons.Rounded.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Approve & Provision", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                        Text("View Payment", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                // Decisions actions row (only for unresolved requests)
+                if (req.status.lowercase() != "approved" && req.status.lowercase() != "rejected") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Reject Button
+                        OutlinedButton(
+                            onClick = onReject,
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF4444)),
+                            border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.5f)),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(42.dp)
+                        ) {
+                            Text("Reject", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+
+                        // Correction notes Button
+                        OutlinedButton(
+                            onClick = onRequestCorrection,
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFF59E0B)),
+                            border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.5f)),
+                            modifier = Modifier
+                                .weight(1.2f)
+                                .height(42.dp)
+                        ) {
+                            Text("Request Correction", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+
+                        // Approve Button
+                        Button(
+                            onClick = onApprove,
+                            enabled = isPaymentSuccessful,
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF10B981),
+                                disabledContainerColor = Color(0xFFE2E8F0)
+                            ),
+                            modifier = Modifier
+                                .weight(1.4f)
+                                .height(42.dp)
+                        ) {
+                            Text(
+                                "Approve",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = if (isPaymentSuccessful) Color.White else Color(0xFF94A3B8)
+                            )
+                        }
+                    }
+
+                    if (!isPaymentSuccessful) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Waiting for successful payment.",
+                                color = Color(0xFFEF4444),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun RequestTimeline(req: PharmacyRequestEntity) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFF8FAFC), RoundedCornerShape(12.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text("Request Verifications Timeline", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
+        
+        // Step 1: Submission
+        TimelineItem(
+            title = "Registration Submitted",
+            desc = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(Date(req.createdAt)),
+            isCompleted = true,
+            isLast = false
+        )
+        
+        // Step 2: Payment Verification
+        val isPaid = req.paymentStatus?.lowercase() == "success" || 
+                     req.paymentStatus?.lowercase() == "paid" || 
+                     req.paymentStatus?.lowercase() == "successful" ||
+                     req.paymentStatus?.lowercase() == "payment_completed"
+                     
+        val paymentDesc = if (isPaid) {
+            "Paid: $${String.format(Locale.getDefault(), "%.2f", req.paymentAmount ?: 0.0)} (ID: ${req.paymentId ?: "N/A"})"
+        } else if (req.paymentStatus?.lowercase() == "pending") {
+            "Payment Pending (ID: ${req.paymentId ?: "N/A"})"
+        } else {
+            "No Payment Received"
+        }
+        TimelineItem(
+            title = "Payment Verification",
+            desc = paymentDesc,
+            isCompleted = isPaid,
+            isWarning = req.paymentStatus?.lowercase() == "pending" || req.paymentStatus.isNullOrEmpty(),
+            isLast = false
+        )
+        
+        // Step 3: Admin review decision
+        val step3Title = when (req.status.lowercase()) {
+            "approved" -> "Approved & Activated"
+            "rejected" -> "Registration Rejected"
+            "correction_requested" -> "Correction Requested"
+            else -> "Pending Review"
+        }
+        val step3Desc = when (req.status.lowercase()) {
+            "approved" -> {
+                val dateStr = req.approvedAt?.let { SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(Date(it)) } ?: "N/A"
+                "Approved by admin ${req.approvedBy ?: ""} on $dateStr"
+            }
+            "rejected" -> "Reason: ${req.rejectionReason ?: "None specified"}"
+            "correction_requested" -> "Notes: ${req.correctionNotes ?: "None specified"}"
+            else -> "Awaiting final decision from master admin."
+        }
+        val step3Completed = req.status.lowercase() == "approved" || req.status.lowercase() == "rejected" || req.status.lowercase() == "correction_requested"
+        TimelineItem(
+            title = step3Title,
+            desc = step3Desc,
+            isCompleted = step3Completed,
+            isWarning = req.status.lowercase() == "correction_requested",
+            isError = req.status.lowercase() == "rejected",
+            isLast = true
+        )
+    }
+}
+
+@Composable
+fun TimelineItem(
+    title: String,
+    desc: String,
+    isCompleted: Boolean,
+    isWarning: Boolean = false,
+    isError: Boolean = false,
+    isLast: Boolean = false
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(top = 2.dp)
+        ) {
+            val dotColor = when {
+                isError -> Color(0xFFEF4444)
+                isWarning -> Color(0xFFF59E0B)
+                isCompleted -> Color(0xFF10B981)
+                else -> Color(0xFF94A3B8)
+            }
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(dotColor)
+            )
+            if (!isLast) {
+                Box(
+                    modifier = Modifier
+                        .width(2.dp)
+                        .height(26.dp)
+                        .background(Color(0xFFE2E8F0))
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(10.dp))
+        Column {
+            Text(title, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
+            Text(desc, fontSize = 10.sp, color = Color(0xFF64748B))
         }
     }
 }
