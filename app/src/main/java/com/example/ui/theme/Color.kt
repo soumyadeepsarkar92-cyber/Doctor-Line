@@ -2,13 +2,19 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val MedicalBlue = Color(0xFF2563EB)
-val MedicalGreen = Color(0xFF10B981)
+// Premium modern healthcare colors
+val BrandPurple = Color(0xFF7C5DFA)      // Vibrant healthcare lavender/purple
+val BrandMint = Color(0xFF10B981)        // Healing mint green
+val BrandTeal = Color(0xFF14B8A6)        // Subtle supporting healthcare teal
 
-val LightBackground = Color.White
-val LightCard = Color(0xFFF1F5F9)
-val LightText = Color(0xFF334155)
+// Light theme semantic colors
+val LightBackground = Color(0xFFF8FAFC)   // Crisp slate/off-white for plenty of white space
+val LightCard = Color(0xFFFFFFFF)         // Pure white cards for soft shadows
+val LightTextPrimary = Color(0xFF0F172A)  // Deep charcoal for strong typography contrast
+val LightTextSecondary = Color(0xFF64748B)// Cool slate for secondary typography
 
-val DarkBackground = Color(0xFF0F172A)
-val DarkCard = Color(0xFF1E293B)
-val DarkText = Color.White
+// Dark theme semantic colors
+val DarkBackground = Color(0xFF0A0F1D)    // Premium custom deep indigo-black
+val DarkCard = Color(0xFF151D30)          // Custom card color for depth layering
+val DarkTextPrimary = Color(0xFFF8FAFC)   // Crisp near-white
+val DarkTextSecondary = Color(0xFF94A3B8) // Muted slate gray

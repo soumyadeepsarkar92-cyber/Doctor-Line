@@ -29,6 +29,29 @@ class MainViewModel(application: Application, private val repository: DoctorLine
         }
     }
 
+    // Optional Location System States (Country, State, District, City)
+    val selectedCountry = MutableStateFlow(sharedPrefs.getString("selected_country", "India") ?: "India")
+    val selectedState = MutableStateFlow(sharedPrefs.getString("selected_state", "West Bengal") ?: "West Bengal")
+    val selectedDistrict = MutableStateFlow(sharedPrefs.getString("selected_district", "Kolkata") ?: "Kolkata")
+    val selectedCity = MutableStateFlow(sharedPrefs.getString("selected_city", "Kolkata") ?: "Kolkata")
+
+    fun updateLocation(country: String, state: String, district: String, city: String) {
+        selectedCountry.value = country
+        selectedState.value = state
+        selectedDistrict.value = district
+        selectedCity.value = city
+        sharedPrefs.edit().apply {
+            putString("selected_country", country)
+            putString("selected_state", state)
+            putString("selected_district", district)
+            putString("selected_city", city)
+            apply()
+        }
+        viewModelScope.launch {
+            repository.logAction("Update Location", "User updated location selection to: $city, $district, $state, $country")
+        }
+    }
+
     // Active logged in user
     val activeUser: StateFlow<UserEntity?> = repository.activeUser
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)

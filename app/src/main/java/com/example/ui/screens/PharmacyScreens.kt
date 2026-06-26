@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -117,76 +119,102 @@ fun PharmacyModuleScreen(
 
     Scaffold(
         bottomBar = {
-            NavigationBar(
-                containerColor = if (isDark) Color(0xFF1E293B) else Color.White,
-                tonalElevation = 8.dp,
-                modifier = Modifier.navigationBarsPadding()
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
             ) {
-                NavigationBarItem(
-                    selected = selectedBottomTab == "dashboard",
-                    onClick = { selectedBottomTab = "dashboard" },
-                    icon = { Icon(Icons.Rounded.Dashboard, contentDescription = "Dashboard") },
-                    label = { Text("Home", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = if (isDark) Color(0xFF34D399) else primaryGreen,
-                        selectedTextColor = if (isDark) Color(0xFF34D399) else primaryGreen,
-                        indicatorColor = if (isDark) Color(0xFF065F46) else Color(0xFFDCFCE7),
-                        unselectedIconColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
-                        unselectedTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(16.dp, RoundedCornerShape(24.dp))
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = if (isDark) {
+                                    listOf(Color(0xFF1E293B).copy(alpha = 0.95f), Color(0xFF0F172A).copy(alpha = 0.95f))
+                                } else {
+                                    listOf(Color.White, Color(0xFFF8FAFC))
+                                }
+                            )
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = if (isDark) Color(0xFF334155).copy(alpha = 0.6f) else Color(0xFFE2E8F0),
+                            shape = RoundedCornerShape(24.dp)
+                        )
+                        .padding(vertical = 8.dp, horizontal = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceAround
+                ) {
+                    val tabs = listOf(
+                        Triple("dashboard", "Home", Icons.Rounded.Dashboard),
+                        Triple("doctors", "Doctors", Icons.Rounded.Healing),
+                        Triple("schedules", "Shifts", Icons.Rounded.CalendarMonth),
+                        Triple("bookings", "Slots", Icons.Rounded.Assignment),
+                        Triple("subscription", "Plans", Icons.Rounded.WorkspacePremium)
                     )
-                )
-                NavigationBarItem(
-                    selected = selectedBottomTab == "doctors",
-                    onClick = { selectedBottomTab = "doctors" },
-                    icon = { Icon(Icons.Rounded.Healing, contentDescription = "Doctors") },
-                    label = { Text("Doctors", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = if (isDark) Color(0xFF34D399) else primaryGreen,
-                        selectedTextColor = if (isDark) Color(0xFF34D399) else primaryGreen,
-                        indicatorColor = if (isDark) Color(0xFF065F46) else Color(0xFFDCFCE7),
-                        unselectedIconColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
-                        unselectedTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
-                    )
-                )
-                NavigationBarItem(
-                    selected = selectedBottomTab == "schedules",
-                    onClick = { selectedBottomTab = "schedules" },
-                    icon = { Icon(Icons.Rounded.CalendarMonth, contentDescription = "Schedule") },
-                    label = { Text("Shifts", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = if (isDark) Color(0xFF34D399) else primaryGreen,
-                        selectedTextColor = if (isDark) Color(0xFF34D399) else primaryGreen,
-                        indicatorColor = if (isDark) Color(0xFF065F46) else Color(0xFFDCFCE7),
-                        unselectedIconColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
-                        unselectedTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
-                    )
-                )
-                NavigationBarItem(
-                    selected = selectedBottomTab == "bookings",
-                    onClick = { selectedBottomTab = "bookings" },
-                    icon = { Icon(Icons.Rounded.Assignment, contentDescription = "Appointments") },
-                    label = { Text("Slots", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = if (isDark) Color(0xFF34D399) else primaryGreen,
-                        selectedTextColor = if (isDark) Color(0xFF34D399) else primaryGreen,
-                        indicatorColor = if (isDark) Color(0xFF065F46) else Color(0xFFDCFCE7),
-                        unselectedIconColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
-                        unselectedTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
-                    )
-                )
-                NavigationBarItem(
-                    selected = selectedBottomTab == "subscription",
-                    onClick = { selectedBottomTab = "subscription" },
-                    icon = { Icon(Icons.Rounded.WorkspacePremium, contentDescription = "Premium Subscription") },
-                    label = { Text("Plans", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color(0xFF6C5DD3), // Unique purple for plans
-                        selectedTextColor = Color(0xFF6C5DD3),
-                        indicatorColor = Color(0xFFF3E8FF),
-                        unselectedIconColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
-                        unselectedTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
-                    )
-                )
+
+                    tabs.forEach { (tabId, label, icon) ->
+                        val isSelected = selectedBottomTab == tabId
+
+                        val scale by animateFloatAsState(
+                            targetValue = if (isSelected) 1.08f else 1.0f,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                            label = "nav_scale"
+                        )
+
+                        val activeColor = if (tabId == "subscription") {
+                            Color(0xFF6C5DD3)
+                        } else {
+                            if (isDark) Color(0xFF34D399) else primaryGreen
+                        }
+                        val inactiveColor = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8)
+                        val activeBgColor = if (tabId == "subscription") {
+                            Color(0xFFF3E8FF)
+                        } else {
+                            if (isDark) Color(0xFF065F46) else Color(0xFFEFFDF5)
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .graphicsLayer(scaleX = scale, scaleY = scale)
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable(
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = { selectedBottomTab = tabId }
+                                )
+                                .padding(vertical = 6.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(width = 44.dp, height = 32.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(if (isSelected) activeBgColor else Color.Transparent)
+                            ) {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = label,
+                                    tint = if (isSelected) activeColor else inactiveColor,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                text = label,
+                                fontSize = 10.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) activeColor else inactiveColor
+                            )
+                        }
+                    }
+                }
             }
         },
         containerColor = if (isDark) Color(0xFF0F172A) else Color.White
@@ -276,7 +304,7 @@ fun PharmacyHomeDashboard(
     val context = LocalContext.current
 
     val primaryGreen = Color(0xFF00A86B)
-    val primaryBlue = Color(0xFF0F52BA)
+    val primaryBlue = Color(0xFF7C5DFA)
 
     val activeTheme by viewModel.appTheme.collectAsState()
     val isDark = when (activeTheme) {
@@ -993,7 +1021,7 @@ fun PharmacyHomeDashboard(
                                 // Draw Path curve line
                                 drawPath(
                                     path = path,
-                                    color = Color(0xFF0F52BA),
+                                    color = Color(0xFF7C5DFA),
                                     style = Stroke(width = 5f, cap = StrokeCap.Round)
                                 )
 
@@ -1007,14 +1035,14 @@ fun PharmacyHomeDashboard(
                                 drawPath(
                                     path = fillPath,
                                     brush = Brush.verticalGradient(
-                                        colors = listOf(Color(0xFF0F52BA).copy(alpha = 0.25f), Color.White.copy(alpha = 0f))
+                                        colors = listOf(Color(0xFF7C5DFA).copy(alpha = 0.25f), Color.White.copy(alpha = 0f))
                                     )
                                 )
 
                                 // Circles
                                 points.forEach { pt ->
                                     drawCircle(
-                                        color = Color(0xFF0F52BA),
+                                        color = Color(0xFF7C5DFA),
                                         radius = 8f,
                                         center = pt
                                     )

@@ -105,9 +105,9 @@ fun LoginScreen(
     }
 
     // Modern Medical Archetypes
-    val primaryColor = Color(0xFF2563EB) // Clean Blue
-    val secondaryColor = Color(0xFF10B981) // Clinical Green
-    val indigoColor = Color(0xFF4F46E5) // Executive Indigo
+    val primaryColor = Color(0xFF7C5DFA) // Modern Lavender/Purple
+    val secondaryColor = Color(0xFF10B981) // Clinical Mint Green
+    val indigoColor = Color(0xFF6C5DD3) // Premium Slate Purple
     
     val accentColor = when (selectedRole) {
         "Patient" -> primaryColor
@@ -119,10 +119,10 @@ fun LoginScreen(
     val textColor = if (isDark) Color.White else Color(0xFF1E293B)
     val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
 
-    // Animated colors for dynamic role transition (Blue, Green, Indigo)
+    // Animated colors for dynamic role transition (Purple, Mint, Indigo)
     val bgStartColor by animateColorAsState(
         targetValue = when (selectedRole) {
-            "Patient" -> if (isDark) Color(0xFF0F172A) else Color(0xFFEFF6FF)
+            "Patient" -> if (isDark) Color(0xFF0F172A) else Color(0xFFF3EFFF)
             "Pharmacy" -> if (isDark) Color(0xFF022C22) else Color(0xFFF0FDF4)
             else -> if (isDark) Color(0xFF1E1B4B) else Color(0xFFF5F3FF) // Admin
         },
@@ -132,7 +132,7 @@ fun LoginScreen(
 
     val bgEndColor by animateColorAsState(
         targetValue = when (selectedRole) {
-            "Patient" -> if (isDark) Color(0xFF1E3A8A) else Color(0xFFDBEAFE)
+            "Patient" -> if (isDark) Color(0xFF1B1437) else Color(0xFFEBE5FF)
             "Pharmacy" -> if (isDark) Color(0xFF064E3B) else Color(0xFFDCFCE7)
             else -> if (isDark) Color(0xFF312E81) else Color(0xFFEDE9FE) // Admin
         },
@@ -159,9 +159,9 @@ fun LoginScreen(
             label = "roleDecoration"
         ) { role ->
             val decorColor = when (role) {
-                "Patient" -> Color(0xFF3B82F6).copy(alpha = if (isDark) 0.08f else 0.04f)
+                "Patient" -> Color(0xFF7C5DFA).copy(alpha = if (isDark) 0.08f else 0.04f)
                 "Pharmacy" -> Color(0xFF10B981).copy(alpha = if (isDark) 0.08f else 0.04f)
-                else -> Color(0xFF6366F1).copy(alpha = if (isDark) 0.08f else 0.04f)
+                else -> Color(0xFF6C5DD3).copy(alpha = if (isDark) 0.08f else 0.04f)
             }
             
             Box(modifier = Modifier.fillMaxSize()) {
@@ -312,6 +312,21 @@ fun LoginScreen(
                     AndroidView(
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                         factory = { ctx ->
+                            // Pre-create WebView HTTP Cache/Code Cache js/wasm directories to prevent Chromium opendir errors
+                            try {
+                                val webViewCacheDir = java.io.File(ctx.cacheDir, "WebView/Default/HTTP Cache/Code Cache")
+                                val jsDir = java.io.File(webViewCacheDir, "js")
+                                val wasmDir = java.io.File(webViewCacheDir, "wasm")
+                                if (!jsDir.exists()) {
+                                    jsDir.mkdirs()
+                                }
+                                if (!wasmDir.exists()) {
+                                    wasmDir.mkdirs()
+                                }
+                            } catch (e: Exception) {
+                                android.util.Log.e("WebViewCacheHelper", "Failed to pre-create directories: ${e.message}")
+                            }
+
                             WebView(ctx).apply {
                                 settings.javaScriptEnabled = true
                                 settings.domStorageEnabled = true
@@ -1969,7 +1984,7 @@ fun PharmacyRegistrationDialog(
                                                         modifier = Modifier
                                                             .size(26.dp)
                                                             .clip(RoundedCornerShape(6.dp))
-                                                            .background(Color(0xFF0F52BA)),
+                                                            .background(Color(0xFF7C5DFA)),
                                                         contentAlignment = Alignment.Center
                                                     ) {
                                                         Text("R", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
@@ -2207,11 +2222,11 @@ fun SaaSOnboardingHeader(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (isDark) Color(0xFF0F172A) else Color.White)
-            .padding(vertical = 14.dp, horizontal = 10.dp),
+            .background(if (isDark) Color(0xFF0F172A) else Color(0xFFF8FAFC))
+            .padding(vertical = 20.dp, horizontal = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Line & Icons Row
+        // Horizontal timeline row
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -2221,87 +2236,181 @@ fun SaaSOnboardingHeader(
                 val isCompleted = i < currentStep
                 val isActive = i == currentStep
                 
-                val circleBg = when {
-                    isCompleted -> if (isDark) Color(0xFF1B4D3E) else Color(0xFFDCFCE7)
-                    isActive -> if (isDark) Color(0xFF4F46E5) else Color(0xFF6C5DD3)
-                    else -> if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
-                }
+                // Animation for scale on active
+                val stepScale by animateFloatAsState(
+                    targetValue = if (isActive) 1.12f else 1.0f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                    label = "stepScale"
+                )
+
+                // Animation for checkmark scale
+                val checkmarkScale by animateFloatAsState(
+                    targetValue = if (isCompleted) 1.0f else 0.0f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                    label = "checkmarkScale"
+                )
+
+                val activeGradient = Brush.linearGradient(
+                    colors = listOf(Color(0xFF7C5DFA), Color(0xFF9F85FF))
+                )
+                val completedGradient = Brush.linearGradient(
+                    colors = listOf(Color(0xFF10B981), Color(0xFF00A86B))
+                )
+                val inactiveColor = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
                 
                 val iconColor = when {
-                    isCompleted -> if (isDark) Color(0xFF4ADE80) else Color(0xFF15803D)
+                    isCompleted -> Color.White
                     isActive -> Color.White
                     else -> if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8)
                 }
 
-                val borderStroke = if (isActive) {
-                    BorderStroke(2.dp, (if (isDark) Color(0xFF818CF8) else Color(0xFF6C5DD3)).copy(alpha = 0.3f))
-                } else null
-
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.weight(1f)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(if (i < totalSteps) 1f else 0.4f)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(circleBg)
-                            .then(if (borderStroke != null) Modifier.border(borderStroke, CircleShape) else Modifier),
-                        contentAlignment = Alignment.Center
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.graphicsLayer(
+                            scaleX = stepScale,
+                            scaleY = stepScale
+                        )
                     ) {
-                        if (isCompleted) {
-                            Icon(
-                                imageVector = Icons.Rounded.Check,
-                                contentDescription = "Completed",
-                                tint = iconColor,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        } else {
-                            Icon(
-                                imageVector = icons[i - 1],
-                                contentDescription = steps[i - 1],
-                                tint = iconColor,
-                                modifier = Modifier.size(18.dp)
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(46.dp)
+                                .drawBehind {
+                                    if (isActive) {
+                                        drawCircle(
+                                            color = Color(0xFF6366F1).copy(alpha = 0.28f),
+                                            radius = size.maxDimension / 2 + 8.dp.toPx()
+                                        )
+                                    }
+                                }
+                                .clip(CircleShape)
+                                .then(
+                                    when {
+                                        isCompleted -> Modifier.background(completedGradient)
+                                        isActive -> Modifier.background(activeGradient)
+                                        else -> Modifier.background(inactiveColor)
+                                    }
+                                )
+                                .border(
+                                    width = if (isActive) 2.dp else 1.dp,
+                                    color = when {
+                                        isCompleted -> Color.Transparent
+                                        isActive -> Color(0xFF818CF8)
+                                        else -> if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1)
+                                    },
+                                    shape = CircleShape
+                                )
+                        ) {
+                            if (isCompleted) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Check,
+                                    contentDescription = "Completed",
+                                    tint = iconColor,
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .graphicsLayer(
+                                            scaleX = checkmarkScale,
+                                            scaleY = checkmarkScale
+                                        )
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = icons[i - 1],
+                                    contentDescription = steps[i - 1],
+                                    tint = iconColor,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text(
+                            text = steps[i - 1],
+                            fontSize = 10.sp,
+                            fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium,
+                            color = when {
+                                isCompleted -> if (isDark) Color(0xFF34D399) else Color(0xFF059669)
+                                isActive -> if (isDark) Color(0xFF818CF8) else Color(0xFF4F46E5)
+                                else -> if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8)
+                            },
+                            textAlign = TextAlign.Center
+                        )
+                    }
+
+                    if (i < totalSteps) {
+                        val trackProgress by animateFloatAsState(
+                            targetValue = if (i < currentStep) 1.0f else if (i == currentStep) 0.5f else 0.0f,
+                            animationSpec = tween(500),
+                            label = "trackProgress"
+                        )
+                        
+                        Box(
+                            modifier = Modifier
+                                .height(3.dp)
+                                .weight(1f)
+                                .padding(horizontal = 4.dp)
+                                .clip(CircleShape)
+                                .background(if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(trackProgress)
+                                    .fillMaxHeight()
+                                    .background(
+                                        brush = Brush.horizontalGradient(
+                                            colors = listOf(Color(0xFF10B981), Color(0xFF3B82F6))
+                                        )
+                                    )
                             )
                         }
                     }
-                    
-                    Spacer(modifier = Modifier.height(4.dp))
-                    
-                    Text(
-                        text = steps[i - 1],
-                        fontSize = 9.sp,
-                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
-                        color = when {
-                            isCompleted -> if (isDark) Color(0xFF4ADE80) else Color(0xFF15803D)
-                            isActive -> if (isDark) Color(0xFF818CF8) else Color(0xFF6C5DD3)
-                            else -> if (isDark) Color(0xFF64748B) else Color(0xFF64748B)
-                        }
-                    )
-                }
-                
-                if (i < totalSteps) {
-                    val lineColor = if (i < currentStep) Color(0xFF22C55E) else (if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0))
-                    Box(
-                        modifier = Modifier
-                            .height(2.dp)
-                            .weight(0.2f)
-                            .background(lineColor)
-                    )
                 }
             }
         }
-        
-        Spacer(modifier = Modifier.height(10.dp))
-        
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         val progress = currentStep.toFloat() / totalSteps.toFloat()
+        val animatedProgress by animateFloatAsState(
+            targetValue = progress,
+            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow),
+            label = "animatedProgress"
+        )
+        
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "Step $currentStep of $totalSteps: ${steps[currentStep - 1]}",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (isDark) Color(0xFFE2E8F0) else Color(0xFF1E293B)
+            )
+            Text(
+                text = "${(progress * 100).toInt()}% Completed",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isDark) Color(0xFF38BDF8) else Color(0xFF2563EB)
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(6.dp))
+
         LinearProgressIndicator(
-            progress = progress,
+            progress = animatedProgress,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(4.dp)
-                .clip(RoundedCornerShape(2.dp)),
-            color = if (isDark) Color(0xFF818CF8) else Color(0xFF6C5DD3),
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp)),
+            color = if (isDark) Color(0xFF38BDF8) else Color(0xFF2563EB),
             trackColor = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
         )
     }

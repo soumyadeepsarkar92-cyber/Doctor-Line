@@ -92,7 +92,7 @@ fun RazorpayCheckoutDialog(
     }
 
     val razorpayDarkTheme = Color(0xFF0F172A)
-    val razorpayBlue = Color(0xFF3399FF)
+    val razorpayBlue = Color(0xFF7C5DFA)
     val razorpayGreen = Color(0xFF10B981)
     val dividerColor = Color(0xFF334155)
 
@@ -131,7 +131,7 @@ fun RazorpayCheckoutDialog(
                             modifier = Modifier
                                 .size(28.dp)
                                 .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFF0F52BA)),
+                                .background(Color(0xFF7C5DFA)),
                             contentAlignment = Alignment.Center
                         ) {
                             Text("R", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)

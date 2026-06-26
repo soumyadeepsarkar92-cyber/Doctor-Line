@@ -12,29 +12,35 @@ import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme =
   darkColorScheme(
-    primary = MedicalBlue,
-    secondary = MedicalGreen,
+    primary = BrandPurple,
+    secondary = BrandMint,
+    tertiary = BrandTeal,
     background = DarkBackground,
     surface = DarkCard,
-    onBackground = DarkText,
-    onSurface = DarkText
+    onBackground = DarkTextPrimary,
+    onSurface = DarkTextPrimary,
+    surfaceVariant = DarkCard.copy(alpha = 0.8f),
+    onSurfaceVariant = DarkTextSecondary
   )
 
 private val LightColorScheme =
   lightColorScheme(
-    primary = MedicalBlue,
-    secondary = MedicalGreen,
+    primary = BrandPurple,
+    secondary = BrandMint,
+    tertiary = BrandTeal,
     background = LightBackground,
     surface = LightCard,
-    onBackground = LightText,
-    onSurface = LightText
+    onBackground = LightTextPrimary,
+    onSurface = LightTextPrimary,
+    surfaceVariant = LightCard.copy(alpha = 0.9f),
+    onSurfaceVariant = LightTextSecondary
   )
 
 @Composable
 fun MyApplicationTheme(
   darkTheme: Boolean = isSystemInDarkTheme(),
-  // Dynamic color is available on Android 12+
-  dynamicColor: Boolean = true,
+  // Disabling dynamic colors to enforce the premium, cohesive healthcare branding consistently
+  dynamicColor: Boolean = false,
   content: @Composable () -> Unit,
 ) {
   val colorScheme =

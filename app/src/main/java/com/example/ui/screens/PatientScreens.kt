@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,6 +32,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.*
 import com.example.ui.MainViewModel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 
 // ============================================
 // MAIN PATIENT NAVIGATION WRAPPER
@@ -57,75 +62,104 @@ fun PatientModuleScreen(
 
     Scaffold(
         bottomBar = {
-            NavigationBar(
-                containerColor = if (isDark) Color(0xFF1E293B) else Color.White,
-                tonalElevation = 8.dp,
-                modifier = Modifier.navigationBarsPadding()
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 20.dp, vertical = 10.dp)
             ) {
-                NavigationBarItem(
-                    selected = selectedBottomTab == "home" && currentSubScreen == "home",
-                    onClick = {
-                        selectedBottomTab = "home"
-                        currentSubScreen = "home"
-                    },
-                    icon = { Icon(Icons.Rounded.Home, contentDescription = "Home") },
-                    label = { Text("Home", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = if (isDark) Color(0xFF60A5FA) else Color(0xFF0F52BA),
-                        selectedTextColor = if (isDark) Color(0xFF60A5FA) else Color(0xFF0F52BA),
-                        indicatorColor = if (isDark) Color(0xFF334155) else Color(0xFFEEF5FF),
-                        unselectedIconColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
-                        unselectedTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(16.dp, RoundedCornerShape(24.dp))
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = if (isDark) {
+                                    listOf(Color(0xFF1E293B).copy(alpha = 0.95f), Color(0xFF0F172A).copy(alpha = 0.95f))
+                                } else {
+                                    listOf(Color.White, Color(0xFFF8FAFC))
+                                }
+                            )
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = if (isDark) Color(0xFF334155).copy(alpha = 0.6f) else Color(0xFFE2E8F0),
+                            shape = RoundedCornerShape(24.dp)
+                        )
+                        .padding(vertical = 8.dp, horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceAround
+                ) {
+                    val tabs = listOf(
+                        Triple("home", "Home", Icons.Rounded.Home),
+                        Triple("appointments", "Bookings", Icons.Rounded.CalendarMonth),
+                        Triple("notifications", "Notifs", Icons.Rounded.Notifications),
+                        Triple("profile", "Profile", Icons.Rounded.Person)
                     )
-                )
-                NavigationBarItem(
-                    selected = selectedBottomTab == "appointments",
-                    onClick = {
-                        selectedBottomTab = "appointments"
-                        currentSubScreen = "home" // reset to clear detail stacks
-                    },
-                    icon = { Icon(Icons.Rounded.CalendarMonth, contentDescription = "Appointments") },
-                    label = { Text("Bookings", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = if (isDark) Color(0xFF60A5FA) else Color(0xFF0F52BA),
-                        selectedTextColor = if (isDark) Color(0xFF60A5FA) else Color(0xFF0F52BA),
-                        indicatorColor = if (isDark) Color(0xFF334155) else Color(0xFFEEF5FF),
-                        unselectedIconColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
-                        unselectedTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
-                    )
-                )
-                NavigationBarItem(
-                    selected = selectedBottomTab == "notifications",
-                    onClick = {
-                        selectedBottomTab = "notifications"
-                        currentSubScreen = "home"
-                    },
-                    icon = { Icon(Icons.Rounded.Notifications, contentDescription = "Notifications") },
-                    label = { Text("Notifs", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = if (isDark) Color(0xFF60A5FA) else Color(0xFF0F52BA),
-                        selectedTextColor = if (isDark) Color(0xFF60A5FA) else Color(0xFF0F52BA),
-                        indicatorColor = if (isDark) Color(0xFF334155) else Color(0xFFEEF5FF),
-                        unselectedIconColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
-                        unselectedTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
-                    )
-                )
-                NavigationBarItem(
-                    selected = selectedBottomTab == "profile",
-                    onClick = {
-                        selectedBottomTab = "profile"
-                        currentSubScreen = "home"
-                    },
-                    icon = { Icon(Icons.Rounded.Person, contentDescription = "Profile") },
-                    label = { Text("Profile", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = if (isDark) Color(0xFF60A5FA) else Color(0xFF0F52BA),
-                        selectedTextColor = if (isDark) Color(0xFF60A5FA) else Color(0xFF0F52BA),
-                        indicatorColor = if (isDark) Color(0xFF334155) else Color(0xFFEEF5FF),
-                        unselectedIconColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
-                        unselectedTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
-                    )
-                )
+
+                    tabs.forEach { (tabId, label, icon) ->
+                        val isSelected = if (tabId == "home") {
+                            selectedBottomTab == "home" && currentSubScreen == "home"
+                        } else {
+                            selectedBottomTab == tabId
+                        }
+
+                        val scale by animateFloatAsState(
+                            targetValue = if (isSelected) 1.08f else 1.0f,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                            label = "nav_scale"
+                        )
+
+                        val activeColor = if (isDark) Color(0xFF10B981) else Color(0xFF7C5DFA)
+                        val inactiveColor = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8)
+                        val activeBgColor = if (isDark) Color(0xFF151D30) else Color(0xFFF3EFFF)
+
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .graphicsLayer(scaleX = scale, scaleY = scale)
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable(
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = {
+                                        selectedBottomTab = tabId
+                                        if (tabId == "appointments") {
+                                            currentSubScreen = "home"
+                                        } else if (tabId == "home") {
+                                            currentSubScreen = "home"
+                                        }
+                                    }
+                                )
+                                .padding(vertical = 6.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(width = 46.dp, height = 32.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(if (isSelected) activeBgColor else Color.Transparent)
+                            ) {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = label,
+                                    tint = if (isSelected) activeColor else inactiveColor,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                text = label,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) activeColor else inactiveColor
+                            )
+                        }
+                    }
+                }
             }
         },
         containerColor = if (isDark) Color(0xFF0F172A) else Color(0xFFFFFFFF)
@@ -229,6 +263,11 @@ fun PatientHomeScreen(
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedSpecialty by remember { mutableStateOf("All") }
+    var showLocationDialog by remember { mutableStateOf(false) }
+    var includeOtherCities by remember { mutableStateOf(false) }
+
+    val selectedCity by viewModel.selectedCity.collectAsState()
+    val selectedCountry by viewModel.selectedCountry.collectAsState()
 
     val specialties = listOf("All", "Cardiologist", "Pediatrician", "Dermatologist", "General Physician")
 
@@ -236,7 +275,13 @@ fun PatientHomeScreen(
         val matchesSpecialty = selectedSpecialty == "All" || doctor.specialization == selectedSpecialty
         val matchesSearch = doctor.name.contains(searchQuery, ignoreCase = true) ||
                 doctor.specialization.contains(searchQuery, ignoreCase = true)
-        matchesSpecialty && matchesSearch
+        
+        val matchesCity = includeOtherCities || run {
+            val pharmacy = pharmacies.find { it.id == doctor.pharmacyId }
+            val pharmacyCity = if (pharmacy != null) getPharmacyCity(pharmacy.address) else "Kolkata"
+            pharmacyCity.equals(selectedCity, ignoreCase = true)
+        }
+        matchesSpecialty && matchesSearch && matchesCity
     }
 
     val todayDateStr = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date()) }
@@ -245,6 +290,14 @@ fun PatientHomeScreen(
             val doc = doctors.find { it.id == booking.doctorId }
             doc?.availabilityStatus == "Running Late"
         }
+    }
+
+    if (showLocationDialog) {
+        LocationSelectorDialog(
+            viewModel = viewModel,
+            isDark = isDark,
+            onDismiss = { showLocationDialog = false }
+        )
     }
 
     LazyColumn(
@@ -262,7 +315,14 @@ fun PatientHomeScreen(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isDark) Color(0xFF1E293B) else Color(0xFFEFF6FF))
+                            .clickable { showLocationDialog = true }
+                            .padding(vertical = 6.dp, horizontal = 10.dp)
+                    ) {
                         Icon(
                             imageVector = Icons.Rounded.LocationOn,
                             contentDescription = "Location",
@@ -271,10 +331,17 @@ fun PatientHomeScreen(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "Kolkata, India",
+                            text = "$selectedCity, $selectedCountry",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1E293B)
+                            color = if (isDark) Color(0xFFE2E8F0) else Color(0xFF1E293B)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Icon(
+                            imageVector = Icons.Rounded.KeyboardArrowDown,
+                            contentDescription = "Open Selector",
+                            tint = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569),
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                     Text(
@@ -342,21 +409,76 @@ fun PatientHomeScreen(
 
         // Search inputs
         item {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Search doctors or specializations...", color = Color(0xFF94A3B8)) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = Color(0xFF64748B)) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(1.dp, shape = RoundedCornerShape(16.dp)),
-                shape = RoundedCornerShape(16.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF2563EB),
-                    unfocusedBorderColor = Color(0xFFE2E8F0)
-                ),
-                singleLine = true
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Search doctors or specializations...", color = Color(0xFF94A3B8)) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = Color(0xFF64748B)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(1.dp, shape = RoundedCornerShape(16.dp)),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF2563EB),
+                        unfocusedBorderColor = Color(0xFFE2E8F0)
+                    ),
+                    singleLine = true
+                )
+
+                // Scope Selectors Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isDark) Color(0xFF1E293B) else Color(0xFFEFF6FF))
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Rounded.LocationOn,
+                                contentDescription = "Selected City",
+                                tint = Color(0xFF2563EB),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "City: $selectedCity",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isDark) Color(0xFF94A3B8) else Color(0xFF1E3A8A)
+                            )
+                        }
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { includeOtherCities = !includeOtherCities }
+                            .background(if (includeOtherCities) Color(0xFF7C5DFA) else (if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)))
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (includeOtherCities) Icons.Rounded.Language else Icons.Rounded.Home,
+                            contentDescription = "Search Scope",
+                            tint = if (includeOtherCities) Color.White else (if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (includeOtherCities) "Search All Cities" else "This City Only",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (includeOtherCities) Color.White else (if (isDark) Color(0xFFE2E8F0) else Color(0xFF475569))
+                        )
+                    }
+                }
+            }
         }
 
         // Realtime Notifications Banner (Blue Glass Card)
@@ -855,12 +977,12 @@ fun PatientHomeScreen(
                         val isSelected = selectedSpecialty == spec
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isSelected) Color(0xFF0F52BA) else Color.White)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(if (isSelected) Color(0xFF7C5DFA) else Color.White)
                                 .border(
                                     width = 1.dp,
                                     color = if (isSelected) Color.Transparent else Color(0xFFE2E8F0),
-                                    shape = RoundedCornerShape(12.dp)
+                                    shape = RoundedCornerShape(20.dp)
                                 )
                                 .clickable { selectedSpecialty = spec }
                                 .padding(horizontal = 14.dp, vertical = 8.dp)
@@ -982,7 +1104,7 @@ fun DoctorCard(
                 Icon(
                     imageVector = if (doctor.bannerName.contains("female")) Icons.Rounded.Face else Icons.Rounded.Person,
                     contentDescription = doctor.name,
-                    tint = if (isSuspended) Color(0xFFB91C1C) else Color(0xFF0F52BA),
+                    tint = if (isSuspended) Color(0xFFB91C1C) else Color(0xFF7C5DFA),
                     modifier = Modifier.size(40.dp)
                 )
             }
@@ -1033,7 +1155,7 @@ fun DoctorCard(
                 Text(
                     text = doctor.specialization,
                     fontSize = 13.sp,
-                    color = if (isSuspended) Color(0xFFEF4444) else Color(0xFF0F52BA),
+                    color = if (isSuspended) Color(0xFFEF4444) else Color(0xFF7C5DFA),
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(top = 2.dp)
                 )
@@ -1100,13 +1222,13 @@ fun DoctorCard(
                     )
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSuspended) Color(0xFFFCA5A5) else Color(0xFFEEF5FF))
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isSuspended) Color(0xFFFCA5A5) else Color(0xFFF3EFFF))
                             .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
                         Text(
                             text = if (isSuspended) "Unavailable" else "Book Appointment",
-                            color = if (isSuspended) Color(0xFF7F1D1D) else Color(0xFF0F52BA),
+                            color = if (isSuspended) Color(0xFF7F1D1D) else Color(0xFF7C5DFA),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -1192,7 +1314,7 @@ fun DoctorDetailsScreen(
                         .clip(RoundedCornerShape(18.dp))
                         .background(
                             brush = Brush.linearGradient(
-                                colors = listOf(Color(0xFFEEF5FF), Color(0xFFCFE2FE))
+                                colors = listOf(Color(0xFFF3EFFF), Color(0xFFE5DBFF))
                             )
                         ),
                     contentAlignment = Alignment.Center
@@ -1200,7 +1322,7 @@ fun DoctorDetailsScreen(
                     Icon(
                         imageVector = if (doctor.bannerName.contains("female")) Icons.Rounded.Face else Icons.Rounded.Person,
                         contentDescription = doctor.name,
-                        tint = Color(0xFF0F52BA),
+                        tint = Color(0xFF7C5DFA),
                         modifier = Modifier.size(46.dp)
                     )
                 }
@@ -1218,7 +1340,7 @@ fun DoctorDetailsScreen(
                         text = doctor.specialization,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F52BA),
+                        color = Color(0xFF7C5DFA),
                         modifier = Modifier.padding(top = 2.dp)
                     )
                     Row(
@@ -1287,7 +1409,7 @@ fun DoctorDetailsScreen(
                     label = "Consultation Fee",
                     value = "₹${doctor.fee}",
                     icon = Icons.Rounded.Payments,
-                    color = Color(0xFF0F52BA),
+                    color = Color(0xFF7C5DFA),
                     modifier = Modifier.weight(1f)
                 )
                 StatPanel(
@@ -1390,10 +1512,10 @@ fun DoctorDetailsScreen(
                         val isDateSel = selectedDate == fullDateStr
                         
                         Card(
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, if (isDateSel) Color(0xFF0F52BA) else Color(0xFFE2E8F0)),
+                            shape = RoundedCornerShape(20.dp),
+                            border = BorderStroke(1.dp, if (isDateSel) Color(0xFF7C5DFA) else Color(0xFFE2E8F0)),
                             colors = CardDefaults.cardColors(
-                                containerColor = if (isDateSel) Color(0xFF0F52BA) else Color(0xFFF8FAFC)
+                                containerColor = if (isDateSel) Color(0xFF7C5DFA) else Color(0xFFF8FAFC)
                             ),
                             modifier = Modifier
                                 .width(64.dp)
@@ -1444,8 +1566,8 @@ fun DoctorDetailsScreen(
                         val isSelected = selectedSlot == slot
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isSelected) Color(0xFF0F52BA) else Color(0xFFF1F5F9))
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(if (isSelected) Color(0xFF7C5DFA) else Color(0xFFF8FAFC))
                                 .clickable { viewModel.selectTimeSlot(slot) }
                                 .padding(horizontal = 14.dp, vertical = 10.dp)
                         ) {
@@ -1507,12 +1629,12 @@ fun DoctorDetailsScreen(
                                                 modifier = Modifier
                                                     .size(28.dp)
                                                     .clip(CircleShape)
-                                                    .background(Color(0xFFEEF5FF)),
+                                                    .background(Color(0xFFF3EFFF)),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Text(
                                                     text = review.patientName.take(1).uppercase(),
-                                                    color = Color(0xFF0F52BA),
+                                                    color = Color(0xFF7C5DFA),
                                                     fontSize = 12.sp,
                                                     fontWeight = FontWeight.Bold
                                                 )
@@ -1592,7 +1714,7 @@ fun DoctorDetailsScreen(
                                 text = "₹${doctor.fee}",
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Black,
-                                color = Color(0xFF0F52BA),
+                                color = Color(0xFF7C5DFA),
                                 modifier = Modifier.padding(top = 2.dp)
                             )
                         }
@@ -1602,8 +1724,8 @@ fun DoctorDetailsScreen(
 
                     Button(
                         onClick = onNavigateToBooking,
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F52BA)),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C5DFA)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(52.dp)
@@ -1742,7 +1864,7 @@ fun BookingFormScreen(
                         .background(Color.White),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Rounded.Healing, contentDescription = null, tint = Color(0xFF0F52BA))
+                    Icon(Icons.Rounded.Healing, contentDescription = null, tint = Color(0xFF7C5DFA))
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
@@ -1787,18 +1909,18 @@ fun BookingFormScreen(
             value = name,
             onValueChange = { name = it },
             label = { Text("Patient Full Name") },
-            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFF0F52BA)) },
+            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFF7C5DFA)) },
             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-            shape = RoundedCornerShape(12.dp)
+            shape = RoundedCornerShape(20.dp)
         )
 
         OutlinedTextField(
             value = phone,
             onValueChange = { phone = it },
             label = { Text("Phone Number") },
-            leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = Color(0xFF0F52BA)) },
+            leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = Color(0xFF7C5DFA)) },
             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(20.dp),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
         )
 
@@ -1864,8 +1986,8 @@ fun BookingFormScreen(
                 }
             },
             modifier = Modifier.fillMaxWidth().height(52.dp),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F52BA))
+            shape = RoundedCornerShape(20.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C5DFA))
         ) {
             if (isSubmitting) {
                 CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
@@ -1956,13 +2078,13 @@ fun BookingSuccessScreen(
                         Text(text = "QUEUE COUNTER", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF94A3B8))
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFF0F52BA).copy(alpha = 0.1f))
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF7C5DFA).copy(alpha = 0.12f))
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 text = "Token #${booking.tokenNumber}",
-                                color = Color(0xFF0F52BA),
+                                color = Color(0xFF7C5DFA),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Black
                             )
@@ -2101,8 +2223,8 @@ fun PatientAppointmentsScreen(viewModel: MainViewModel) {
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (isSel) Color(0xFF0F52BA) else cardColor)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(if (isSel) Color(0xFF7C5DFA) else cardColor)
                             .clickable { selectedTab = tab }
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
@@ -2164,13 +2286,13 @@ fun PatientAppointmentsScreen(viewModel: MainViewModel) {
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(if (isDark) Color(0xFF334155) else Color(0xFFEEF5FF))
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(if (isDark) Color(0xFF334155) else Color(0xFFF3EFFF))
                                             .padding(horizontal = 8.dp, vertical = 4.dp)
                                     ) {
                                         Text(
                                             text = "Token #${booking.tokenNumber}",
-                                            color = if (isDark) Color(0xFF60A5FA) else Color(0xFF0F52BA),
+                                            color = if (isDark) Color(0xFF10B981) else Color(0xFF7C5DFA),
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Black
                                         )
@@ -2265,7 +2387,7 @@ fun PatientAppointmentsScreen(viewModel: MainViewModel) {
                                                     },
                                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                                                 ) {
-                                                    Text("Edit Review", color = Color(0xFF0F52BA), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                                    Text("Edit Review", color = Color(0xFF7C5DFA), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                                 }
                                             }
                                         } else {
@@ -2347,9 +2469,9 @@ fun PatientAppointmentsScreen(viewModel: MainViewModel) {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(120.dp),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(20.dp),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFF0F52BA),
+                                focusedBorderColor = Color(0xFF7C5DFA),
                                 unfocusedBorderColor = Color(0xFFE2E8F0)
                             )
                         )
@@ -2364,7 +2486,7 @@ fun PatientAppointmentsScreen(viewModel: MainViewModel) {
                                 onClick = { showReviewDialog = false },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9)),
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = RoundedCornerShape(20.dp)
                             ) {
                                 Text("Cancel", color = Color(0xFF475569), fontWeight = FontWeight.Bold)
                             }
@@ -2379,9 +2501,9 @@ fun PatientAppointmentsScreen(viewModel: MainViewModel) {
                                     )
                                     showReviewDialog = false
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F52BA)),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C5DFA)),
                                 modifier = Modifier.weight(1.2f),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = RoundedCornerShape(20.dp)
                             ) {
                                 Text("Submit", color = Color.White, fontWeight = FontWeight.Bold)
                             }
@@ -2450,10 +2572,10 @@ fun PatientNotificationsScreen(viewModel: MainViewModel) {
                                 modifier = Modifier
                                     .size(36.dp)
                                     .clip(CircleShape)
-                                    .background(if (isDark) Color(0xFF334155) else Color(0xFFEEF5FF)),
+                                    .background(if (isDark) Color(0xFF334155) else Color(0xFFF3EFFF)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Rounded.Badge, contentDescription = null, tint = if (isDark) Color(0xFF60A5FA) else Color(0xFF0F52BA), modifier = Modifier.size(18.dp))
+                                Icon(Icons.Rounded.Badge, contentDescription = null, tint = if (isDark) Color(0xFF10B981) else Color(0xFF7C5DFA), modifier = Modifier.size(18.dp))
                             }
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
@@ -2503,10 +2625,10 @@ fun PatientProfileScreen(
             modifier = Modifier
                 .size(100.dp)
                 .clip(CircleShape)
-                .background(if (isDark) Color(0xFF1E293B) else Color(0xFFEEF5FF)),
+                .background(if (isDark) Color(0xFF1E293B) else Color(0xFFF3EFFF)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Rounded.Person, contentDescription = null, tint = if (isDark) Color(0xFF60A5FA) else Color(0xFF0F52BA), modifier = Modifier.size(54.dp))
+            Icon(Icons.Rounded.Person, contentDescription = null, tint = if (isDark) Color(0xFF10B981) else Color(0xFF7C5DFA), modifier = Modifier.size(54.dp))
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -2553,8 +2675,8 @@ fun PatientProfileScreen(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (isSelected) Color(0xFF0F52BA) else buttonBg)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(if (isSelected) Color(0xFF7C5DFA) else buttonBg)
                                 .clickable { viewModel.updateTheme(themeName) }
                                 .padding(vertical = 10.dp),
                             contentAlignment = Alignment.Center
@@ -2608,3 +2730,606 @@ fun ProfileFieldRow(
         }
     }
 }
+
+// ============================================
+// OPTIONAL LOCATION SYSTEM UTILITIES
+// ============================================
+
+fun getPharmacyCity(address: String): String {
+    val addrLower = address.lowercase()
+    if (addrLower.contains("balurghat")) return "Balurghat"
+    if (addrLower.contains("gangarampur")) return "Gangarampur"
+    if (addrLower.contains("english bazar") || addrLower.contains("englishbazar")) return "English Bazar"
+    if (addrLower.contains("kaliachak")) return "Kaliachak"
+    if (addrLower.contains("siliguri")) return "Siliguri"
+    if (addrLower.contains("darjeeling")) return "Darjeeling"
+    if (addrLower.contains("kurseong")) return "Kurseong"
+    if (addrLower.contains("kolkata")) return "Kolkata"
+    if (addrLower.contains("jalpaiguri")) return "Jalpaiguri"
+    if (addrLower.contains("malbazar")) return "Malbazar"
+    if (addrLower.contains("mumbai")) return "Mumbai East"
+    if (addrLower.contains("pune")) return "Pune"
+    if (addrLower.contains("bengaluru") || addrLower.contains("bangalore")) return "Bengaluru"
+    if (addrLower.contains("dwarka")) return "Dwarka"
+    if (addrLower.contains("new delhi") || addrLower.contains("delhi")) return "New Delhi"
+    
+    // Check district
+    if (addrLower.contains("dakshin dinajpur")) return "Balurghat"
+    if (addrLower.contains("malda")) return "Malda"
+    if (addrLower.contains("darjeeling")) return "Siliguri"
+    if (addrLower.contains("kolkata")) return "Kolkata"
+    if (addrLower.contains("jalpaiguri")) return "Jalpaiguri"
+    
+    return "Kolkata"
+}
+
+fun retrieveGPSLocation(
+    context: android.content.Context,
+    viewModel: MainViewModel,
+    onResult: (Boolean, String) -> Unit
+) {
+    try {
+        val locationManager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as android.location.LocationManager
+        val isGpsEnabled = locationManager.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER)
+        val isNetworkEnabled = locationManager.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)
+        
+        if (!isGpsEnabled && !isNetworkEnabled) {
+            onResult(false, "GPS and Network location services are currently disabled.")
+            return
+        }
+        
+        val provider = if (isNetworkEnabled) android.location.LocationManager.NETWORK_PROVIDER else android.location.LocationManager.GPS_PROVIDER
+        
+        // Use last known location for quick response
+        val lastKnown = locationManager.getLastKnownLocation(provider)
+        if (lastKnown != null) {
+            reverseGeocode(context, lastKnown.latitude, lastKnown.longitude, viewModel, onResult)
+            return
+        }
+        
+        // Request single update fallback
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            locationManager.getCurrentLocation(
+                provider,
+                null,
+                context.mainExecutor
+            ) { location ->
+                if (location != null) {
+                    reverseGeocode(context, location.latitude, location.longitude, viewModel, onResult)
+                } else {
+                    onResult(false, "Could not acquire current GPS location. Please choose manually.")
+                }
+            }
+        } else {
+            locationManager.requestSingleUpdate(
+                provider,
+                object : android.location.LocationListener {
+                    override fun onLocationChanged(location: android.location.Location) {
+                        reverseGeocode(context, location.latitude, location.longitude, viewModel, onResult)
+                    }
+                    override fun onStatusChanged(p0: String?, p1: Int, p2: android.os.Bundle?) {}
+                    override fun onProviderEnabled(p0: String) {}
+                    override fun onProviderDisabled(p0: String) {}
+                },
+                null
+            )
+        }
+    } catch (e: SecurityException) {
+        onResult(false, "Location permissions have been denied. Please select your location manually.")
+    } catch (e: Exception) {
+        onResult(false, "Error accessing GPS: ${e.message}")
+    }
+}
+
+fun reverseGeocode(
+    context: android.content.Context,
+    lat: Double,
+    lng: Double,
+    viewModel: MainViewModel,
+    onResult: (Boolean, String) -> Unit
+) {
+    // Run Geocoder network query on background thread
+    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        try {
+            val geocoder = android.location.Geocoder(context, java.util.Locale.getDefault())
+            @Suppress("DEPRECATION")
+            val addresses = geocoder.getFromLocation(lat, lng, 1)
+            val address = addresses?.firstOrNull()
+            
+            if (address != null) {
+                val country = address.countryName ?: "India"
+                val state = address.adminArea ?: "West Bengal"
+                val district = address.subAdminArea ?: address.locality ?: "Kolkata"
+                val city = address.locality ?: address.subAdminArea ?: "Kolkata"
+                
+                val finalCountry = if (country.isNotBlank()) country else "India"
+                val finalState = if (state.isNotBlank()) state else "West Bengal"
+                val finalDistrict = if (district.isNotBlank()) district else "Kolkata"
+                val finalCity = if (city.isNotBlank()) city else "Kolkata"
+                
+                withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    viewModel.updateLocation(finalCountry, finalState, finalDistrict, finalCity)
+                    onResult(true, "Successfully located: $finalCity, $finalState")
+                }
+            } else {
+                withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onResult(false, "Could not resolve address details for GPS coordinates. Please select manually.")
+                }
+            }
+        } catch (e: Exception) {
+            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                onResult(false, "Address lookup failed: ${e.message}. Please select manually.")
+            }
+        }
+    }
+}
+
+@Composable
+fun LocationSelectorDialog(
+    viewModel: MainViewModel,
+    isDark: Boolean,
+    onDismiss: () -> Unit
+) {
+    val selectedCountry by viewModel.selectedCountry.collectAsState()
+    val selectedState by viewModel.selectedState.collectAsState()
+    val selectedDistrict by viewModel.selectedDistrict.collectAsState()
+    val selectedCity by viewModel.selectedCity.collectAsState()
+
+    var tempCountry by remember(selectedCountry) { mutableStateOf(selectedCountry) }
+    var tempState by remember(selectedState) { mutableStateOf(selectedState) }
+    var tempDistrict by remember(selectedDistrict) { mutableStateOf(selectedDistrict) }
+    var tempCity by remember(selectedCity) { mutableStateOf(selectedCity) }
+
+    val countries = listOf("India", "United States")
+
+    val statesOfCountry = mapOf(
+        "India" to listOf("West Bengal", "Maharashtra", "Delhi", "Karnataka"),
+        "United States" to listOf("California", "New York", "Texas")
+    )
+
+    val districtsOfState = mapOf(
+        "West Bengal" to listOf("Dakshin Dinajpur", "Malda", "Darjeeling", "Kolkata", "Jalpaiguri"),
+        "Maharashtra" to listOf("Mumbai", "Pune"),
+        "Delhi" to listOf("New Delhi"),
+        "Karnataka" to listOf("Bangalore Urban"),
+        "California" to listOf("Los Angeles County", "San Francisco County"),
+        "New York" to listOf("New York County"),
+        "Texas" to listOf("Travis County")
+    )
+
+    val citiesOfDistrict = mapOf(
+        "Dakshin Dinajpur" to listOf("Balurghat", "Gangarampur"),
+        "Malda" to listOf("Malda", "English Bazar", "Kaliachak"),
+        "Darjeeling" to listOf("Siliguri", "Darjeeling", "Kurseong"),
+        "Kolkata" to listOf("Kolkata"),
+        "Jalpaiguri" to listOf("Jalpaiguri", "Dhupguri"),
+        "Mumbai" to listOf("Mumbai East", "Mumbai West"),
+        "Pune" to listOf("Pune", "Pimpri"),
+        "New Delhi" to listOf("New Delhi", "Dwarka"),
+        "Bangalore Urban" to listOf("Bengaluru", "Whitefield"),
+        "Los Angeles County" to listOf("Los Angeles", "Santa Monica"),
+        "San Francisco County" to listOf("San Francisco", "Oakland"),
+        "New York County" to listOf("New York City", "Manhattan"),
+        "Travis County" to listOf("Austin")
+    )
+
+    // State expansion controls for dropdown menus
+    var countryExpanded by remember { mutableStateOf(false) }
+    var stateExpanded by remember { mutableStateOf(false) }
+    var districtExpanded by remember { mutableStateOf(false) }
+    var cityExpanded by remember { mutableStateOf(false) }
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var isLocating by remember { mutableStateOf(false) }
+
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val fineGranted = permissions[android.Manifest.permission.ACCESS_FINE_LOCATION] == true
+        val coarseGranted = permissions[android.Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (fineGranted || coarseGranted) {
+            isLocating = true
+            retrieveGPSLocation(context, viewModel) { success, msg ->
+                isLocating = false
+                if (success) {
+                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                    onDismiss()
+                } else {
+                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        } else {
+            android.widget.Toast.makeText(context, "Location permission denied. Please select manually.", android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF1E293B) else Color.White),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .fillMaxWidth()
+            ) {
+                // Header Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Select Location",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Black,
+                        color = if (isDark) Color.White else Color(0xFF0F172A)
+                    )
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "Close Selector",
+                            tint = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // GPS Location Selector
+                Button(
+                    onClick = {
+                        val hasFine = androidx.core.content.ContextCompat.checkSelfPermission(
+                            context,
+                            android.Manifest.permission.ACCESS_FINE_LOCATION
+                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        val hasCoarse = androidx.core.content.ContextCompat.checkSelfPermission(
+                            context,
+                            android.Manifest.permission.ACCESS_COARSE_LOCATION
+                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+                        if (hasFine || hasCoarse) {
+                            isLocating = true
+                            retrieveGPSLocation(context, viewModel) { success, msg ->
+                                isLocating = false
+                                if (success) {
+                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                    onDismiss()
+                                } else {
+                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        } else {
+                            permissionLauncher.launch(
+                                arrayOf(
+                                    android.Manifest.permission.ACCESS_FINE_LOCATION,
+                                    android.Manifest.permission.ACCESS_COARSE_LOCATION
+                                )
+                            )
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    enabled = !isLocating
+                ) {
+                    if (isLocating) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.MyLocation,
+                                contentDescription = "Use Current Location",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Use Current Location",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = Color.White
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Selector Mode Divider
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(modifier = Modifier.weight(1f).height(1.dp).background(if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)))
+                    Text(
+                        text = "OR CHOOSE MANUALLY",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8),
+                        modifier = Modifier.padding(horizontal = 12.dp)
+                    )
+                    Box(modifier = Modifier.weight(1f).height(1.dp).background(if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)))
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Manual Hierarchy Selectors
+                // 1. Country Selection
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "Country",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569),
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isDark) Color(0xFF0F172A) else Color(0xFFF8FAFC))
+                            .border(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
+                            .clickable { countryExpanded = true }
+                            .padding(horizontal = 16.dp, vertical = 14.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = tempCountry,
+                                color = if (isDark) Color.White else Color(0xFF0F172A),
+                                fontSize = 14.sp
+                            )
+                            Icon(
+                                imageVector = Icons.Rounded.ArrowDropDown,
+                                contentDescription = "Country Menu",
+                                tint = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = countryExpanded,
+                            onDismissRequest = { countryExpanded = false },
+                            modifier = Modifier.background(if (isDark) Color(0xFF1E293B) else Color.White)
+                        ) {
+                            countries.forEach { item ->
+                                DropdownMenuItem(
+                                    text = { Text(item, color = if (isDark) Color.White else Color(0xFF0F172A)) },
+                                    onClick = {
+                                        tempCountry = item
+                                        tempState = statesOfCountry[item]?.firstOrNull() ?: ""
+                                        tempDistrict = districtsOfState[tempState]?.firstOrNull() ?: ""
+                                        tempCity = citiesOfDistrict[tempDistrict]?.firstOrNull() ?: ""
+                                        countryExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // 2. State Selection
+                val states = statesOfCountry[tempCountry] ?: emptyList()
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "State",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569),
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isDark) Color(0xFF0F172A) else Color(0xFFF8FAFC))
+                            .border(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
+                            .clickable { stateExpanded = true }
+                            .padding(horizontal = 16.dp, vertical = 14.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = tempState,
+                                color = if (isDark) Color.White else Color(0xFF0F172A),
+                                fontSize = 14.sp
+                            )
+                            Icon(
+                                imageVector = Icons.Rounded.ArrowDropDown,
+                                contentDescription = "State Menu",
+                                tint = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = stateExpanded,
+                            onDismissRequest = { stateExpanded = false },
+                            modifier = Modifier.background(if (isDark) Color(0xFF1E293B) else Color.White)
+                        ) {
+                            states.forEach { item ->
+                                DropdownMenuItem(
+                                    text = { Text(item, color = if (isDark) Color.White else Color(0xFF0F172A)) },
+                                    onClick = {
+                                        tempState = item
+                                        tempDistrict = districtsOfState[item]?.firstOrNull() ?: ""
+                                        tempCity = citiesOfDistrict[tempDistrict]?.firstOrNull() ?: ""
+                                        stateExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // 3. District Selection
+                val districts = districtsOfState[tempState] ?: emptyList()
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "District",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569),
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isDark) Color(0xFF0F172A) else Color(0xFFF8FAFC))
+                            .border(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
+                            .clickable { districtExpanded = true }
+                            .padding(horizontal = 16.dp, vertical = 14.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = tempDistrict,
+                                color = if (isDark) Color.White else Color(0xFF0F172A),
+                                fontSize = 14.sp
+                            )
+                            Icon(
+                                imageVector = Icons.Rounded.ArrowDropDown,
+                                contentDescription = "District Menu",
+                                tint = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = districtExpanded,
+                            onDismissRequest = { districtExpanded = false },
+                            modifier = Modifier.background(if (isDark) Color(0xFF1E293B) else Color.White)
+                        ) {
+                            districts.forEach { item ->
+                                DropdownMenuItem(
+                                    text = { Text(item, color = if (isDark) Color.White else Color(0xFF0F172A)) },
+                                    onClick = {
+                                        tempDistrict = item
+                                        tempCity = citiesOfDistrict[item]?.firstOrNull() ?: ""
+                                        districtExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // 4. City Selection
+                val cities = citiesOfDistrict[tempDistrict] ?: emptyList()
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "City",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569),
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isDark) Color(0xFF0F172A) else Color(0xFFF8FAFC))
+                            .border(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
+                            .clickable { cityExpanded = true }
+                            .padding(horizontal = 16.dp, vertical = 14.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = tempCity,
+                                color = if (isDark) Color.White else Color(0xFF0F172A),
+                                fontSize = 14.sp
+                            )
+                            Icon(
+                                imageVector = Icons.Rounded.ArrowDropDown,
+                                contentDescription = "City Menu",
+                                tint = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = cityExpanded,
+                            onDismissRequest = { cityExpanded = false },
+                            modifier = Modifier.background(if (isDark) Color(0xFF1E293B) else Color.White)
+                        ) {
+                            cities.forEach { item ->
+                                DropdownMenuItem(
+                                    text = { Text(item, color = if (isDark) Color.White else Color(0xFF0F172A)) },
+                                    onClick = {
+                                        tempCity = item
+                                        cityExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Apply Actions
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)),
+                        border = BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                    ) {
+                        Text("Cancel", fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = {
+                            viewModel.updateLocation(tempCountry, tempState, tempDistrict, tempCity)
+                            onDismiss()
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C5DFA)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                    ) {
+                        Text("Apply", fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+            }
+        }
+    }
+}
+
