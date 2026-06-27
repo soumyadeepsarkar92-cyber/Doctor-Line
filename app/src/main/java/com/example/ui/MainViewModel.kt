@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import io.github.jan.supabase.auth.auth
 
 class MainViewModel(application: Application, private val repository: DoctorLineRepository) : AndroidViewModel(application) {
 
@@ -55,6 +56,12 @@ class MainViewModel(application: Application, private val repository: DoctorLine
     // Active logged in user
     val activeUser: StateFlow<UserEntity?> = repository.activeUser
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    init {
+        viewModelScope.launch {
+            repository.validateSession()
+        }
+    }
 
     // Lists
     val allPharmacies: StateFlow<List<PharmacyEntity>> = repository.allPharmacies
@@ -322,18 +329,36 @@ class MainViewModel(application: Application, private val repository: DoctorLine
     }
 
     // AUTH ACTIONS
-    fun login(name: String, email: String, phone: String, role: String) {
+    fun login(name: String, email: String, phone: String, role: String, profilePhotoUrl: String? = null, onError: ((String) -> Unit)? = null) {
         viewModelScope.launch {
-            repository.loginUser(name, email, phone, role)
+            try {
+                repository.loginUser(name, email, phone, role, profilePhotoUrl = profilePhotoUrl)
+            } catch (e: Exception) {
+                onError?.invoke(e.message ?: "Login failed")
+            }
         }
     }
 
     fun logout() {
         viewModelScope.launch {
+            try {
+                com.example.data.SupabaseManager.client?.auth?.signOut()
+            } catch (e: Exception) {
+                 android.util.Log.e("MainViewModel", "Failed to sign out from Supabase: ${e.message}")
+            }
+            
             repository.logoutUser()
             _selectedDoctor.value = null
             _selectedTimeSlot.value = null
             _lastCreatedBooking.value = null
+            
+            // Clear WebView cookies to reset Google session for next login
+            try {
+                android.webkit.CookieManager.getInstance().removeAllCookies(null)
+                android.webkit.CookieManager.getInstance().flush()
+            } catch (e: Exception) {
+                android.util.Log.e("MainViewModel", "Failed to clear cookies: ${e.message}")
+            }
         }
     }
 

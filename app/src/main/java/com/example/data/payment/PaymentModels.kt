@@ -2,6 +2,9 @@ package com.example.data.payment
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import androidx.room.ForeignKey
+import androidx.room.Index
+import com.example.data.PharmacyEntity
 import java.util.UUID
 
 /**
@@ -74,7 +77,21 @@ data class PaymentOrder(
 /**
  * Reusable entity for local Payment History tracking.
  */
-@Entity(tableName = "payment_history")
+@Entity(
+    tableName = "payment_history",
+    foreignKeys = [
+        ForeignKey(
+            entity = PharmacyEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["pharmacyId"],
+            onDelete = ForeignKey.SET_NULL
+        )
+    ],
+    indices = [
+        Index(value = ["orderId"], unique = true),
+        Index(value = ["pharmacyId"])
+    ]
+)
 data class PaymentHistoryRecord(
     @PrimaryKey val paymentId: String = UUID.randomUUID().toString(),
     val orderId: String,
@@ -87,7 +104,9 @@ data class PaymentHistoryRecord(
     val failureReason: String? = null,
     val pharmacyId: String? = null,
     val signature: String? = null,
-    val method: String? = null
+    val method: String? = null,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
 )
 
 /**

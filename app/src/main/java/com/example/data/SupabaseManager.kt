@@ -21,7 +21,10 @@ object SupabaseManager {
                     supabaseKey = BuildConfig.SUPABASE_ANON_KEY
                 ) {
                     install(Postgrest)
-                    install(Auth)
+                    install(Auth) {
+                        scheme = "io.supabase.flutter"
+                        host = "login-callback"
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("SupabaseManager", "Error creating Supabase Client", e)
@@ -143,14 +146,14 @@ object SupabaseManager {
     }
 
 
-    suspend fun fetchDoctors(): List<DoctorEntity> = withContext(Dispatchers.IO) {
+    suspend fun fetchDoctors(limit: Int = 100, offset: Int = 0): List<DoctorEntity> = withContext(Dispatchers.IO) {
         if (!isConfigured) {
             Log.d("SupabaseManager", "[Local Fallback Mode] Fetch skipped (Supabase URL/Key not configured in Secrets)")
             return@withContext emptyList()
         }
         val doctorsList = mutableListOf<DoctorEntity>()
         try {
-            val urlStr = "${BuildConfig.SUPABASE_URL}/rest/v1/doctors"
+            val urlStr = "${BuildConfig.SUPABASE_URL}/rest/v1/doctors?limit=$limit&offset=$offset"
             val url = URL(urlStr)
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
@@ -208,14 +211,14 @@ object SupabaseManager {
         doctorsList
     }
 
-    suspend fun fetchFavourites(patientId: String): List<FavouriteDoctorEntity> = withContext(Dispatchers.IO) {
+    suspend fun fetchFavourites(patientId: String, limit: Int = 100, offset: Int = 0): List<FavouriteDoctorEntity> = withContext(Dispatchers.IO) {
         if (!isConfigured) {
             Log.d("SupabaseManager", "[Local Fallback Mode] Fetch favourites skipped (Supabase URL/Key not configured)")
             return@withContext emptyList()
         }
         val favouritesList = mutableListOf<FavouriteDoctorEntity>()
         try {
-            val urlStr = "${BuildConfig.SUPABASE_URL}/rest/v1/favourite_doctors?patient_id=eq.$patientId"
+            val urlStr = "${BuildConfig.SUPABASE_URL}/rest/v1/favourite_doctors?patient_id=eq.$patientId&limit=$limit&offset=$offset"
             val url = URL(urlStr)
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
@@ -253,14 +256,14 @@ object SupabaseManager {
         favouritesList
     }
 
-    suspend fun fetchPharmacies(): List<PharmacyEntity> = withContext(Dispatchers.IO) {
+    suspend fun fetchPharmacies(limit: Int = 100, offset: Int = 0): List<PharmacyEntity> = withContext(Dispatchers.IO) {
         if (!isConfigured) {
             Log.d("SupabaseManager", "[Local Fallback Mode] Fetch pharmacies skipped (Supabase URL/Key not configured)")
             return@withContext emptyList()
         }
         val list = mutableListOf<PharmacyEntity>()
         try {
-            val urlStr = "${BuildConfig.SUPABASE_URL}/rest/v1/pharmacies"
+            val urlStr = "${BuildConfig.SUPABASE_URL}/rest/v1/pharmacies?limit=$limit&offset=$offset"
             val url = URL(urlStr)
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "GET"

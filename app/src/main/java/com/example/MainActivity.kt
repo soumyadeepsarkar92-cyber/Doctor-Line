@@ -14,12 +14,18 @@ import androidx.compose.ui.Modifier
 import com.example.ui.MainViewModel
 import com.example.ui.screens.*
 import com.example.ui.theme.MyApplicationTheme
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.handleDeeplinks
+import io.github.jan.supabase.SupabaseClient
 
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        
+        // Handle Supabase deep links for OAuth
+        com.example.data.SupabaseManager.client?.handleDeeplinks(intent = intent)
 
         // Acquire repositories from Application container
         val app = application as DoctorLineApplication
@@ -51,6 +57,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun DoctorLineAppContent(viewModel: MainViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val activeUser by viewModel.activeUser.collectAsState()
     
     // Splash screen view state
@@ -69,8 +76,13 @@ fun DoctorLineAppContent(viewModel: MainViewModel) {
                 // Not authenticated yet - load Login system
                 LoginScreen(
                     viewModel = viewModel,
-                    onLoginSuccess = { name, email, phone, role ->
-                        viewModel.login(name, email, phone, role)
+                    onLoginSuccess = { name, email, phone, role, profilePhotoUrl ->
+                        viewModel.login(
+                            name, email, phone, role, profilePhotoUrl,
+                            onError = { errorMsg ->
+                                android.widget.Toast.makeText(context, errorMsg, android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        )
                     }
                 )
             } else {
@@ -98,8 +110,13 @@ fun DoctorLineAppContent(viewModel: MainViewModel) {
                         // Fallback security card
                         LoginScreen(
                             viewModel = viewModel,
-                            onLoginSuccess = { name, email, phone, role ->
-                                viewModel.login(name, email, phone, role)
+                            onLoginSuccess = { name, email, phone, role, profilePhotoUrl ->
+                                viewModel.login(
+                                    name, email, phone, role, profilePhotoUrl,
+                                    onError = { errorMsg ->
+                                        android.widget.Toast.makeText(context, errorMsg, android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                )
                             }
                         )
                     }

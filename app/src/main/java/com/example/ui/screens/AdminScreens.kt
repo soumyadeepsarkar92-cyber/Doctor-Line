@@ -332,18 +332,18 @@ fun AdminDashboardView(viewModel: MainViewModel, onSelectMenu: (String) -> Unit)
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         PremiumStatsCard(
-                            label = "Monthly Revenue",
-                            value = "₹${monthlyRevenue.toInt()}",
-                            icon = Icons.Rounded.Payments,
+                            label = "Total Patients",
+                            value = totalPatients.toString(),
+                            icon = Icons.Rounded.People,
                             color = primaryColor,
                             bgColor = cardBg,
                             isDark = isDark,
                             modifier = Modifier.weight(1f)
                         )
                         PremiumStatsCard(
-                            label = "Today's Appointments",
-                            value = todaysAppointments.toString(),
-                            icon = Icons.Rounded.EventAvailable,
+                            label = "Total Pharmacies",
+                            value = totalPharmacies.toString(),
+                            icon = Icons.Rounded.LocalPharmacy,
                             color = mintColor,
                             bgColor = cardBg,
                             isDark = isDark,
@@ -365,10 +365,10 @@ fun AdminDashboardView(viewModel: MainViewModel, onSelectMenu: (String) -> Unit)
                             modifier = Modifier.weight(1f)
                         )
                         PremiumStatsCard(
-                            label = "Total Patients",
-                            value = totalPatients.toString(),
-                            icon = Icons.Rounded.People,
-                            color = Color(0xFF6366F1),
+                            label = "Approved Pharmacies",
+                            value = requests.count { it.status.lowercase() == "approved" }.toString(),
+                            icon = Icons.Rounded.CheckCircle,
+                            color = Color(0xFF10B981),
                             bgColor = cardBg,
                             isDark = isDark,
                             modifier = Modifier.weight(1f)
@@ -380,19 +380,19 @@ fun AdminDashboardView(viewModel: MainViewModel, onSelectMenu: (String) -> Unit)
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         PremiumStatsCard(
-                            label = "Total Doctors",
-                            value = totalDoctors.toString(),
-                            icon = Icons.Rounded.PersonSearch,
-                            color = Color(0xFFEC4899),
+                            label = "Rejected Pharmacies",
+                            value = requests.count { it.status.lowercase() == "rejected" }.toString(),
+                            icon = Icons.Rounded.Cancel,
+                            color = Color(0xFFEF4444),
                             bgColor = cardBg,
                             isDark = isDark,
                             modifier = Modifier.weight(1f)
                         )
                         PremiumStatsCard(
-                            label = "Total Pharmacies",
-                            value = totalPharmacies.toString(),
-                            icon = Icons.Rounded.LocalPharmacy,
-                            color = Color(0xFF0D9488),
+                            label = "Today's Appointments",
+                            value = todaysAppointments.toString(),
+                            icon = Icons.Rounded.EventAvailable,
+                            color = Color(0xFF6366F1),
                             bgColor = cardBg,
                             isDark = isDark,
                             modifier = Modifier.weight(1f)
@@ -560,6 +560,90 @@ fun AdminDashboardView(viewModel: MainViewModel, onSelectMenu: (String) -> Unit)
                 }
             }
         }
+
+        // 4. Recent Activity
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(
+                    text = "Recent Activity",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textPrimary
+                )
+                
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(elevation = 6.dp, shape = RoundedCornerShape(24.dp), clip = false),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = cardBg),
+                    border = BorderStroke(1.dp, borderCol)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        val recentRequests = requests.sortedByDescending { it.createdAt }.take(3)
+                        if (recentRequests.isEmpty()) {
+                            Text("No recent activity.", color = textSecondary, fontSize = 14.sp)
+                        } else {
+                            val dateFormat = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault())
+                            recentRequests.forEach { req ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                when(req.status.lowercase()) {
+                                                    "approved" -> mintColor.copy(alpha = 0.15f)
+                                                    "rejected" -> Color(0xFFEF4444).copy(alpha = 0.15f)
+                                                    else -> Color(0xFFF59E0B).copy(alpha = 0.15f)
+                                                }
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = when(req.status.lowercase()) {
+                                                "approved" -> Icons.Rounded.CheckCircle
+                                                "rejected" -> Icons.Rounded.Cancel
+                                                else -> Icons.Rounded.HourglassEmpty
+                                            },
+                                            contentDescription = null,
+                                            tint = when(req.status.lowercase()) {
+                                                "approved" -> mintColor
+                                                "rejected" -> Color(0xFFEF4444)
+                                                else -> Color(0xFFF59E0B)
+                                            },
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "${req.pharmacyName} (${req.status})",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = textPrimary
+                                        )
+                                        Text(
+                                            text = dateFormat.format(java.util.Date(req.createdAt)),
+                                            fontSize = 12.sp,
+                                            color = textSecondary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -687,6 +771,7 @@ fun AdminPharmaciesView(viewModel: MainViewModel) {
     var pharExpiry by remember { mutableStateOf("2026-07-22") }
     var pharAmount by remember { mutableStateOf(monthly.toInt().toString()) }
     var pharPaymentStatus by remember { mutableStateOf("Paid") }
+    var pharError by remember { mutableStateOf<String?>(null) }
 
     // Helper to open Add Dialog
     fun openAdd() {
@@ -700,6 +785,7 @@ fun AdminPharmaciesView(viewModel: MainViewModel) {
         pharExpiry = "2026-07-22"
         pharAmount = monthly.toInt().toString()
         pharPaymentStatus = "Paid"
+        pharError = null
         pharCreatedDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
         showAddDialog = true
     }
@@ -718,6 +804,7 @@ fun AdminPharmaciesView(viewModel: MainViewModel) {
         pharExpiry = phar.subscriptionExpiry
         pharAmount = phar.subscriptionAmount.toInt().toString()
         pharPaymentStatus = phar.subscriptionPaymentStatus
+        pharError = null
         showEditDialog = true
     }
 
@@ -999,12 +1086,21 @@ fun AdminPharmaciesView(viewModel: MainViewModel) {
                         label = { Text("Created Date") },
                         modifier = Modifier.fillMaxWidth()
                     )
+                    if (pharError != null) {
+                        Text(text = pharError!!, color = Color.Red, fontSize = 12.sp)
+                    }
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        if (pharName.isNotBlank() && pharPhone.isNotBlank()) {
+                        if (pharName.isBlank() || pharPhone.isBlank()) {
+                            pharError = "Please fill in all required fields."
+                        } else if (!pharPhone.matches(Regex("^[6-9]\\d{9}$"))) {
+                            pharError = "Please enter a valid 10-digit Indian mobile number."
+                        } else if (pharmacies.any { it.phone == pharPhone }) {
+                            pharError = "This phone number is already registered to another pharmacy."
+                        } else {
                             val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
                             viewModel.addPharmacy(
                                 name = pharName,
@@ -1101,12 +1197,21 @@ fun AdminPharmaciesView(viewModel: MainViewModel) {
                         label = { Text("Payment Status (Paid, Pending)") },
                         modifier = Modifier.fillMaxWidth()
                     )
+                    if (pharError != null) {
+                        Text(text = pharError!!, color = Color.Red, fontSize = 12.sp)
+                    }
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        if (pharName.isNotBlank()) {
+                        if (pharName.isBlank() || ownerName.isBlank() || pharPhone.isBlank()) {
+                            pharError = "Please fill in all required fields."
+                        } else if (!pharPhone.matches(Regex("^[6-9]\\d{9}$"))) {
+                            pharError = "Please enter a valid 10-digit Indian mobile number."
+                        } else if (pharmacies.any { it.phone == pharPhone && it.id != selected.id }) {
+                            pharError = "This phone number is already registered to another pharmacy."
+                        } else {
                             viewModel.editPharmacy(
                                 id = selected.id,
                                 name = pharName,

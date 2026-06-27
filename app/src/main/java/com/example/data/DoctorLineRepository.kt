@@ -11,21 +11,72 @@ class DoctorLineRepository(private val dao: DoctorLineDao) {
 
     suspend fun getLoggedInUser(): UserEntity? = dao.getLoggedInUser()
 
-    suspend fun loginUser(name: String, email: String, phone: String, role: String) {
+    suspend fun loginUser(name: String, email: String, phone: String, role: String, token: String? = null, refreshToken: String? = null, deviceId: String? = null, profilePhotoUrl: String? = null) {
+        if (role == "Admin") {
+            val authorizedAdmins = listOf("soumyadeepsarkar92@gmail.com", "admin@doctorline.com", "root@doctorline.com")
+            if (email !in authorizedAdmins && !email.endsWith("@doctorline.com")) {
+                throw Exception("Unauthorized Admin Account")
+            }
+        }
+        
         dao.clearUserLogin()
+        
+        // Use provided tokens or generate secure session mock tokens for local testing
+        val actToken = token ?: "ey_${UUID.randomUUID()}"
+        val refToken = refreshToken ?: "ref_${UUID.randomUUID()}"
+        val sessionExpiry = System.currentTimeMillis() + (60 * 60 * 1000) // 1 hour expiry
+        val currentDeviceId = deviceId ?: UUID.randomUUID().toString()
+
         val user = UserEntity(
             id = UUID.randomUUID().toString(),
             name = name,
             email = email,
             phone = phone,
             role = role,
-            isLoggedIn = true
+            isLoggedIn = true,
+            accessToken = actToken,
+            refreshToken = refToken,
+            sessionExpiresAt = sessionExpiry,
+            deviceId = currentDeviceId,
+            emailVerified = true,
+            profilePhotoUrl = profilePhotoUrl
         )
         dao.insertUser(user)
         syncUser(user)
         
         // Log action
-        logAction("User Login", "Logged in as $name ($role)")
+        logAction("User Login", "Secure login established for $name ($role) on device $currentDeviceId")
+    }
+
+    suspend fun refreshSession() {
+        val user = dao.getLoggedInUser()
+        if (user != null && user.isLoggedIn) {
+            val newExpiry = System.currentTimeMillis() + (60 * 60 * 1000)
+            val updatedUser = user.copy(
+                accessToken = "ey_${UUID.randomUUID()}",
+                sessionExpiresAt = newExpiry
+            )
+            dao.insertUser(updatedUser)
+            syncUser(updatedUser)
+            logAction("Session Refresh", "Session token rotated for user ${user.id}")
+        }
+    }
+    
+    suspend fun validateSession(): Boolean {
+        val user = dao.getLoggedInUser()
+        if (user == null || !user.isLoggedIn) return false
+        
+        // Check for locked account
+        if (user.accountLockedUntil != null && user.accountLockedUntil > System.currentTimeMillis()) {
+            logoutUser()
+            return false
+        }
+        
+        // Check token expiry for auto-refresh
+        if (user.sessionExpiresAt != null && user.sessionExpiresAt < System.currentTimeMillis()) {
+            refreshSession()
+        }
+        return true
     }
 
     suspend fun logoutUser() {
@@ -251,10 +302,30 @@ class DoctorLineRepository(private val dao: DoctorLineDao) {
 
     suspend fun fetchAndSyncDoctors() {
         if (SupabaseManager.isConfigured) {
-            val remoteDoctors = SupabaseManager.fetchDoctors()
-            _allDoctors.value = remoteDoctors
-            _activeDoctors.value = remoteDoctors.filter { it.isEnabled && !it.isSoftDeleted }
-            logAction("Fetch Supabase Doctors", "Retrieved ${remoteDoctors.size} live doctor profiles directly from Supabase.")
+            val result = NetworkHelper.executeWithRetry(
+                requestKey = "fetch_doctors",
+                allowOfflineCache = true,
+                fetchFromCache = { dao.getAllDoctors() },
+                saveToCache = { remoteDoctors ->
+                    remoteDoctors.forEach { doc ->
+                        if (dao.getDoctorById(doc.id) != null) {
+                            dao.updateDoctor(doc)
+                        } else {
+                            dao.insertDoctor(doc)
+                        }
+                    }
+                }
+            ) {
+                SupabaseManager.fetchDoctors(limit = 100, offset = 0)
+            }
+            
+            result.onSuccess { remoteDoctors ->
+                _allDoctors.value = remoteDoctors
+                _activeDoctors.value = remoteDoctors.filter { it.isEnabled && !it.isSoftDeleted }
+                logAction("Fetch Supabase Doctors", "Retrieved ${remoteDoctors.size} live doctor profiles directly from Supabase.")
+            }.onFailure { 
+                logAction("Fetch Doctors Failed", "Error fetching doctors: ${it.message}")
+            }
         } else {
             logAction("Fetch Doctors", "Using offline SQLite database for doctor profiles.")
         }
@@ -487,16 +558,29 @@ class DoctorLineRepository(private val dao: DoctorLineDao) {
 
     suspend fun fetchAndSyncPharmacies() {
         if (SupabaseManager.isConfigured) {
-            val remotePharmacies = SupabaseManager.fetchPharmacies()
-            remotePharmacies.forEach { phar ->
-                val existing = dao.getPharmacyById(phar.id)
-                if (existing != null) {
-                    dao.updatePharmacy(phar)
-                } else {
-                    dao.insertPharmacy(phar)
+            val result = NetworkHelper.executeWithRetry(
+                requestKey = "fetch_pharmacies",
+                allowOfflineCache = true,
+                fetchFromCache = { dao.getAllPharmaciesList() },
+                saveToCache = { remotePharmacies ->
+                    remotePharmacies.forEach { phar ->
+                        val existing = dao.getPharmacyById(phar.id)
+                        if (existing != null) {
+                            dao.updatePharmacy(phar)
+                        } else {
+                            dao.insertPharmacy(phar)
+                        }
+                    }
                 }
+            ) {
+                SupabaseManager.fetchPharmacies(limit = 100, offset = 0)
             }
-            logAction("Sync Pharmacies", "Synced ${remotePharmacies.size} pharmacies from Supabase.")
+            
+            result.onSuccess { remotePharmacies ->
+                logAction("Sync Pharmacies", "Synced ${remotePharmacies.size} pharmacies from Supabase.")
+            }.onFailure { 
+                logAction("Sync Pharmacies Failed", "Error syncing pharmacies: ${it.message}")
+            }
         }
     }
 
@@ -644,6 +728,12 @@ class DoctorLineRepository(private val dao: DoctorLineDao) {
                 )
             )
 
+            EmailNotificationService.sendRegistrationStatusUpdate(
+                toEmail = req.email,
+                pharmacyName = req.pharmacyName,
+                status = "approved"
+            )
+
             logAction("Approve Pharmacy Request", "Approved and provisioned pharmacy: ${req.pharmacyName}")
         }
     }
@@ -664,6 +754,13 @@ class DoctorLineRepository(private val dao: DoctorLineDao) {
                 )
             )
 
+            EmailNotificationService.sendRegistrationStatusUpdate(
+                toEmail = req.email,
+                pharmacyName = req.pharmacyName,
+                status = "rejected",
+                additionalNotes = reason
+            )
+
             logAction("Reject Pharmacy Request", "Rejected pharmacy registration: ${req.pharmacyName} for reason: $reason")
         }
     }
@@ -682,6 +779,13 @@ class DoctorLineRepository(private val dao: DoctorLineDao) {
                     message = "Pharmacy Registration Request for '${req.pharmacyName}' requires correction. Notes: $notes",
                     timestamp = System.currentTimeMillis()
                 )
+            )
+
+            EmailNotificationService.sendRegistrationStatusUpdate(
+                toEmail = req.email,
+                pharmacyName = req.pharmacyName,
+                status = "correction_requested",
+                additionalNotes = notes
             )
 
             logAction("Correction Requested", "Requested corrections for pharmacy registration: ${req.pharmacyName} with notes: $notes")
@@ -758,12 +862,25 @@ class DoctorLineRepository(private val dao: DoctorLineDao) {
 
     suspend fun fetchAndSyncFavourites(patientId: String) {
         if (SupabaseManager.isConfigured) {
-            val remoteFavourites = SupabaseManager.fetchFavourites(patientId)
-            dao.deleteFavouritesForPatient(patientId)
-            remoteFavourites.forEach { fav ->
-                dao.insertFavourite(fav)
+            val result = NetworkHelper.executeWithRetry(
+                requestKey = "fetch_favourites_$patientId",
+                allowOfflineCache = true,
+                fetchFromCache = { dao.getFavouritesForPatientList(patientId) },
+                saveToCache = { remoteFavourites ->
+                    dao.deleteFavouritesForPatient(patientId)
+                    remoteFavourites.forEach { fav ->
+                        dao.insertFavourite(fav)
+                    }
+                }
+            ) {
+                SupabaseManager.fetchFavourites(patientId, limit = 100, offset = 0)
             }
-            logAction("Sync Favourites", "Synced ${remoteFavourites.size} favourites from Supabase for patient $patientId.")
+            
+            result.onSuccess { remoteFavourites ->
+                logAction("Sync Favourites", "Synced ${remoteFavourites.size} favourites from Supabase for patient $patientId.")
+            }.onFailure {
+                logAction("Sync Favourites Failed", "Error syncing favourites for patient $patientId: ${it.message}")
+            }
         }
     }
 

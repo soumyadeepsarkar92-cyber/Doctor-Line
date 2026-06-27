@@ -25,9 +25,18 @@ import com.example.data.payment.PaymentHistoryRecord
         PharmacyRequestEntity::class,
         FavouriteDoctorEntity::class,
         PricingSettingsEntity::class,
-        PaymentHistoryRecord::class
+        PaymentHistoryRecord::class,
+        AppointmentAuditLogEntity::class,
+        AppointmentNotificationEntity::class,
+        AppointmentHistoryEntity::class,
+        PaymentAuditLogEntity::class,
+        PaymentNotificationEntity::class,
+        PaymentTrackingHistoryEntity::class,
+        PharmacyApprovalAuditLogEntity::class,
+        PharmacyApprovalNotificationEntity::class,
+        PharmacyApprovalHistoryEntity::class
     ],
-    version = 13,
+    version = 17,
     exportSchema = false
 )
 abstract class DoctorLineDatabase : RoomDatabase() {
@@ -57,11 +66,50 @@ abstract class DoctorLineDatabase : RoomDatabase() {
         ) : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
+                createUpdateTriggers(db)
                 INSTANCE?.let { database ->
                     scope.launch(Dispatchers.IO) {
                         populateDatabase(database.doctorLineDao())
                     }
                 }
+            }
+
+            override fun onOpen(db: SupportSQLiteDatabase) {
+                super.onOpen(db)
+                createUpdateTriggers(db)
+            }
+
+            private fun createUpdateTriggers(db: SupportSQLiteDatabase) {
+                val tables = listOf(
+                    "users", "pharmacies", "doctors", "schedules", "bookings",
+                    "subscriptions", "payments", "notifications", "reviews",
+                    "pharmacy_requests", "pricing_settings", "appointment_audit_logs",
+                    "appointment_notifications", "appointment_history", "payment_audit_logs",
+                    "payment_notifications", "payment_tracking_history", "pharmacy_approval_audit_logs",
+                    "pharmacy_approval_notifications", "pharmacy_approval_history"
+                )
+                tables.forEach { table ->
+                    db.execSQL("""
+                        CREATE TRIGGER IF NOT EXISTS tr_${table}_updated_at
+                        AFTER UPDATE ON $table
+                        FOR EACH ROW
+                        WHEN NEW.updatedAt <= OLD.updatedAt OR NEW.updatedAt IS NULL
+                        BEGIN
+                            UPDATE $table SET updatedAt = (strftime('%s', 'now') * 1000) WHERE id = NEW.id;
+                        END;
+                    """.trimIndent())
+                }
+
+                // payment_history table trigger (using paymentId instead of id)
+                db.execSQL("""
+                    CREATE TRIGGER IF NOT EXISTS tr_payment_history_updated_at
+                    AFTER UPDATE ON payment_history
+                    FOR EACH ROW
+                    WHEN NEW.updatedAt <= OLD.updatedAt OR NEW.updatedAt IS NULL
+                    BEGIN
+                        UPDATE payment_history SET updatedAt = (strftime('%s', 'now') * 1000) WHERE paymentId = NEW.paymentId;
+                    END;
+                """.trimIndent())
             }
         }
 

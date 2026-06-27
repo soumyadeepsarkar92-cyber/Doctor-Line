@@ -2628,7 +2628,16 @@ fun PatientProfileScreen(
                 .background(if (isDark) Color(0xFF1E293B) else Color(0xFFF3EFFF)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Rounded.Person, contentDescription = null, tint = if (isDark) Color(0xFF10B981) else Color(0xFF7C5DFA), modifier = Modifier.size(54.dp))
+            if (user?.profilePhotoUrl != null) {
+                coil.compose.AsyncImage(
+                    model = user.profilePhotoUrl,
+                    contentDescription = "Profile Photo",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
+            } else {
+                Icon(Icons.Rounded.Person, contentDescription = null, tint = if (isDark) Color(0xFF10B981) else Color(0xFF7C5DFA), modifier = Modifier.size(54.dp))
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))

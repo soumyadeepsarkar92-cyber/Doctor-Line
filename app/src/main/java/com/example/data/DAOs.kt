@@ -26,6 +26,9 @@ interface DoctorLineDao {
     @Query("SELECT * FROM pharmacies")
     fun getAllPharmacies(): Flow<List<PharmacyEntity>>
 
+    @Query("SELECT * FROM pharmacies")
+    suspend fun getAllPharmaciesList(): List<PharmacyEntity>
+
     @Query("SELECT * FROM pharmacies WHERE id = :id")
     suspend fun getPharmacyById(id: String): PharmacyEntity?
 
@@ -41,6 +44,9 @@ interface DoctorLineDao {
     // Doctors
     @Query("SELECT * FROM doctors")
     fun getAllDoctorsFlow(): Flow<List<DoctorEntity>>
+
+    @Query("SELECT * FROM doctors")
+    suspend fun getAllDoctors(): List<DoctorEntity>
 
     @Query("SELECT * FROM doctors WHERE isEnabled = 1 AND isSoftDeleted = 0")
     fun getActiveDoctorsFlow(): Flow<List<DoctorEntity>>
@@ -185,6 +191,9 @@ interface DoctorLineDao {
 
     @Query("SELECT * FROM favourite_doctors WHERE patientId = :patientId")
     fun getFavouritesForPatientFlow(patientId: String): Flow<List<FavouriteDoctorEntity>>
+
+    @Query("SELECT * FROM favourite_doctors WHERE patientId = :patientId")
+    suspend fun getFavouritesForPatientList(patientId: String): List<FavouriteDoctorEntity>
 
     @Query("SELECT * FROM favourite_doctors WHERE patientId = :patientId AND doctorId = :doctorId LIMIT 1")
     suspend fun getFavourite(patientId: String, doctorId: String): FavouriteDoctorEntity?

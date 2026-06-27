@@ -1,9 +1,6 @@
 package com.example.ui.screens
 
-import android.graphics.Bitmap
 import android.util.Base64
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -38,7 +35,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import com.example.ui.MainViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -81,7 +77,7 @@ import androidx.compose.foundation.border
 @Composable
 fun LoginScreen(
     viewModel: MainViewModel,
-    onLoginSuccess: (name: String, email: String, phone: String, role: String) -> Unit
+    onLoginSuccess: (name: String, email: String, phone: String, role: String, profilePhotoUrl: String?) -> Unit
 ) {
     var selectedRole by remember { mutableStateOf("Patient") } // "Patient", "Pharmacy", "Admin"
     var showRegisterPharmacyDialog by remember { mutableStateOf(false) }
@@ -91,10 +87,34 @@ fun LoginScreen(
     var emailInput by remember { mutableStateOf("") }
     var passwordInput by remember { mutableStateOf("") }
     var isAuthenticating by remember { mutableStateOf(false) }
-    var showOAuthWebView by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     val scope = rememberCoroutineScope()
+
+    val sessionStatusState = com.example.data.SupabaseManager.client?.auth?.sessionStatus?.collectAsState(initial = null)
+    val sessionStatus = sessionStatusState?.value
+
+    LaunchedEffect(sessionStatus) {
+        if (sessionStatus is io.github.jan.supabase.auth.status.SessionStatus.Authenticated) {
+            val user = com.example.data.SupabaseManager.client?.auth?.currentUserOrNull()
+            if (user != null && selectedRole != "Pharmacy") {
+                val email = user.email ?: ""
+                val metadata = user.userMetadata
+                val fullName = if (metadata != null && metadata.containsKey("full_name")) {
+                    (metadata["full_name"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+                } else if (metadata != null && metadata.containsKey("name")) {
+                    (metadata["name"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+                } else null
+                
+                val name = fullName ?: email.split("@").firstOrNull()?.replaceFirstChar { it.uppercase() } ?: "Google User"
+                val avatarUrl = if (metadata != null && metadata.containsKey("avatar_url")) {
+                    (metadata["avatar_url"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+                } else null
+                
+                onLoginSuccess(name, email, "+91 98765 43210", selectedRole, avatarUrl)
+            }
+        }
+    }
 
     // Retrieve active theme state from ViewModel
     val activeTheme by viewModel.appTheme.collectAsState()
@@ -267,149 +287,7 @@ fun LoginScreen(
             }
         }
 
-        if (showOAuthWebView) {
-            // Full Screen Overlay WebView to solve overlap
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(bgStartColor, bgEndColor)
-                        )
-                    )
-            ) {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    // Header of WebView
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(accentColor)
-                            .padding(horizontal = 20.dp, vertical = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Google Secure Sign-In",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 17.sp
-                        )
-                        IconButton(
-                            onClick = { showOAuthWebView = false },
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.2f))
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Close OAuth",
-                                tint = Color.White
-                            )
-                        }
-                    }
-                    
-                    // WebView Component
-                    AndroidView(
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                        factory = { ctx ->
-                            // Pre-create WebView HTTP Cache/Code Cache js/wasm directories to prevent Chromium opendir errors
-                            try {
-                                val webViewCacheDir = java.io.File(ctx.cacheDir, "WebView/Default/HTTP Cache/Code Cache")
-                                val jsDir = java.io.File(webViewCacheDir, "js")
-                                val wasmDir = java.io.File(webViewCacheDir, "wasm")
-                                if (!jsDir.exists()) {
-                                    jsDir.mkdirs()
-                                }
-                                if (!wasmDir.exists()) {
-                                    wasmDir.mkdirs()
-                                }
-                            } catch (e: Exception) {
-                                android.util.Log.e("WebViewCacheHelper", "Failed to pre-create directories: ${e.message}")
-                            }
-
-                            WebView(ctx).apply {
-                                settings.javaScriptEnabled = true
-                                settings.domStorageEnabled = true
-                                settings.userAgentString = "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.0.0 Mobile Safari/537.36"
-                                
-                                webViewClient = object : WebViewClient() {
-                                    override fun onPageStarted(
-                                        view: WebView?,
-                                        url: String?,
-                                        favicon: Bitmap?
-                                    ) {
-                                        super.onPageStarted(view, url, favicon)
-                                        android.util.Log.d("OAuthWebView", "onPageStarted loading: $url")
-                                        if (url != null) {
-                                            if (url.contains("auth/v1/callback")) {
-                                                showOAuthWebView = false
-                                                val token = extractToken(url)
-                                                if (token != null) {
-                                                    val jwtPayload = decodeJwtPayload(token)
-                                                    if (jwtPayload != null) {
-                                                        val email = jwtPayload.optString("email", "")
-                                                        val userMetadata = jwtPayload.optJSONObject("user_metadata")
-                                                        val fullName = userMetadata?.optString("full_name")
-                                                            ?: userMetadata?.optString("name")
-                                                            ?: "Google User"
-                                                        
-                                                        Toast.makeText(ctx, "Google Login Successful!", Toast.LENGTH_SHORT).show()
-                                                        onLoginSuccess(fullName, email, "+91 98765 43210", selectedRole)
-                                                    } else {
-                                                        Toast.makeText(ctx, "Google Sync Successful!", Toast.LENGTH_SHORT).show()
-                                                        onLoginSuccess("Google User", "google.user@example.com", "+91 98765 43210", selectedRole)
-                                                    }
-                                                } else {
-                                                    Toast.makeText(ctx, "Google OAuth Complete", Toast.LENGTH_SHORT).show()
-                                                    val email = when (selectedRole) {
-                                                        "Patient" -> "soumyadeepsarkar92@gmail.com"
-                                                        "Pharmacy" -> "admin@apollopharmacy.com"
-                                                        else -> "root@doctorline.com"
-                                                    }
-                                                    val name = when (selectedRole) {
-                                                        "Patient" -> "Soumyadeep Sarkar"
-                                                        "Pharmacy" -> "Apollo Pharmacy Admin"
-                                                        else -> "Head Admin Soumya"
-                                                    }
-                                                    onLoginSuccess(name, email, "+91 98765 43210", selectedRole)
-                                                }
-                                            } else if (url.contains("error=") || url.contains("error_description=")) {
-                                                showOAuthWebView = false
-                                                Toast.makeText(ctx, "Google OAuth Login Failed", Toast.LENGTH_LONG).show()
-                                            }
-                                        }
-                                    }
-
-                                    override fun onReceivedError(
-                                        view: WebView?,
-                                        request: android.webkit.WebResourceRequest?,
-                                        error: android.webkit.WebResourceError?
-                                    ) {
-                                        super.onReceivedError(view, request, error)
-                                        val description = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                                            error?.description?.toString()
-                                        } else {
-                                            error?.toString()
-                                        }
-                                        val failingUrl = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-                                            request?.url?.toString()
-                                        } else {
-                                            null
-                                        }
-                                        android.util.Log.e("OAuthWebView", "Error received: $description failingUrl: $failingUrl")
-                                    }
-                                }
-                                
-                                val baseUrl = if (com.example.BuildConfig.SUPABASE_URL.endsWith("/")) com.example.BuildConfig.SUPABASE_URL.removeSuffix("/") else com.example.BuildConfig.SUPABASE_URL
-                                val oauthUrl = "$baseUrl/auth/v1/authorize?provider=google&redirect_to=$baseUrl/auth/v1/callback"
-                                loadUrl(oauthUrl)
-                            }
-                        }
-                    )
-                }
-            }
-        } else {
-            // Main Clean Healthcare form layout
+        // Full Screen form layout
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -449,7 +327,7 @@ fun LoginScreen(
                     modifier = Modifier.padding(bottom = 6.dp)
                 ) {
                     Image(
-                        painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                        painter = painterResource(id = R.drawable.medical_app_icon_1782119145796),
                         contentDescription = "DoctorLine Logo",
                         modifier = Modifier.size(44.dp)
                     )
@@ -665,12 +543,12 @@ fun LoginScreen(
                                                         val sessionUser = client.auth.currentUserOrNull()
                                                         val emailVal = sessionUser?.email ?: emailInput
                                                         val nameVal = emailVal.split("@").firstOrNull()?.replaceFirstChar { it.uppercase() } ?: "Pharmacy User"
-                                                        onLoginSuccess(nameVal, emailVal, "+91 98765 43210", "Pharmacy")
+                                                        onLoginSuccess(nameVal, emailVal, "+91 98765 43210", "Pharmacy", null)
                                                     } else {
-                                                        onLoginSuccess("Apollo Pharmacy Admin", emailInput, "+91 98765 43210", "Pharmacy")
+                                                        Toast.makeText(context, "Supabase not configured.", Toast.LENGTH_LONG).show()
                                                     }
                                                 } else {
-                                                    onLoginSuccess("Apollo Pharmacy Admin", emailInput, "+91 98765 43210", "Pharmacy")
+                                                    Toast.makeText(context, "Invalid credentials.", Toast.LENGTH_LONG).show()
                                                 }
                                             } catch (e: Exception) {
                                                 Toast.makeText(context, "Authentication Failed: ${e.message}", Toast.LENGTH_LONG).show()
@@ -745,18 +623,15 @@ fun LoginScreen(
                             Button(
                                 onClick = {
                                     if (com.example.data.SupabaseManager.isConfigured) {
-                                        showOAuthWebView = true
+                                        scope.launch {
+                                            try {
+                                                com.example.data.SupabaseManager.client?.auth?.signInWith(io.github.jan.supabase.auth.providers.Google)
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "Google Auth Launch Failed: ${e.message}", Toast.LENGTH_LONG).show()
+                                            }
+                                        }
                                     } else {
-                                        val name = when (selectedRole) {
-                                            "Patient" -> "Soumyadeep Sarkar"
-                                            else -> "Head Admin Soumya"
-                                        }
-                                        val email = when (selectedRole) {
-                                            "Patient" -> "soumyadeepsarkar92@gmail.com"
-                                            else -> "root@doctorline.com"
-                                        }
-                                        Toast.makeText(context, "Developer Sandbox Mode: Offline Success", Toast.LENGTH_SHORT).show()
-                                        onLoginSuccess(name, email, "+91 98765 43210", selectedRole)
+                                        Toast.makeText(context, "Developer Sandbox Mode is disabled. Please configure Supabase in AI Studio Secrets.", Toast.LENGTH_LONG).show()
                                     }
                                 },
                                 modifier = Modifier
@@ -785,7 +660,6 @@ fun LoginScreen(
                     }
                 }
             }
-        }
 
         if (showRegisterPharmacyDialog) {
             PharmacyRegistrationDialog(
@@ -862,42 +736,6 @@ fun RoleCard(
     }
 }
 
-// Extract token from redirections of implicit oauth Flow
-fun extractToken(url: String): String? {
-    try {
-        val tokenKey = "access_token="
-        if (url.contains(tokenKey)) {
-            val startIndex = url.indexOf(tokenKey) + tokenKey.length
-            var endIndex = url.indexOf("&", startIndex)
-            if (endIndex == -1) endIndex = url.length
-            return url.substring(startIndex, endIndex)
-        }
-        val codeKey = "code="
-        if (url.contains(codeKey)) {
-            val startIndex = url.indexOf(codeKey) + codeKey.length
-            var endIndex = url.indexOf("&", startIndex)
-            if (endIndex == -1) endIndex = url.length
-            return url.substring(startIndex, endIndex)
-        }
-    } catch (e: Exception) {
-        android.util.Log.e("LoginScreen", "Error extracting token", e)
-    }
-    return null
-}
-
-// Decode JWT payload
-fun decodeJwtPayload(token: String): JSONObject? {
-    try {
-        val parts = token.split(".")
-        if (parts.size < 2) return null
-        val payloadBase64 = parts[1]
-        val decodedBytes = Base64.decode(payloadBase64, Base64.DEFAULT or Base64.NO_WRAP)
-        return JSONObject(String(decodedBytes, Charsets.UTF_8))
-    } catch (e: Exception) {
-        android.util.Log.e("LoginScreen", "Error decoding JWT", e)
-        return null
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1442,7 +1280,7 @@ fun PharmacyRegistrationDialog(
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Image(
-                                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                                    painter = painterResource(id = R.drawable.medical_app_icon_1782119145796),
                                     contentDescription = "DoctorLine Logo",
                                     modifier = Modifier.size(40.dp)
                                 )
@@ -2060,6 +1898,12 @@ fun PharmacyRegistrationDialog(
                                         2 -> {
                                             if (mobile.isBlank() || email.isBlank() || password.isBlank()) {
                                                 errorMessage = "Please enter all fields marked with *."
+                                            } else if (!mobile.matches(Regex("^[6-9]\\d{9}$"))) {
+                                                errorMessage = "Please enter a valid 10-digit Indian mobile number."
+                                            } else if (viewModel.allPharmacies.value.any { it.phone == mobile }) {
+                                                errorMessage = "This mobile number is already registered to a pharmacy."
+                                            } else if (viewModel.allPharmacyRequests.value.any { it.mobile == mobile && it.status.lowercase() != "rejected" }) {
+                                                errorMessage = "A pharmacy request with this mobile number is already pending."
                                             } else if (password.length < 6) {
                                                 errorMessage = "Password must be at least 6 characters."
                                             } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
